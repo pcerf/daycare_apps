@@ -667,6 +667,7 @@
   <button data-tab="planer">Planer</button>
   <button data-tab="standard">Standardpläne</button>
   <button data-tab="historie">Historie</button>
+  <button data-tab="vorlagen">Vorlagen</button>
   <button data-tab="datei">Datei</button>
   <div class="spacer"></div>
   <div class="toolbar">
@@ -1317,6 +1318,20 @@ Bitte **ändern Sie nicht die Struktur** des Antwortblocks – Sie können Zeile
     </div>
   </section>
 
+  <!-- ============ TAB: VORLAGEN ============ -->
+  <section class="tab-content" id="tab-vorlagen">
+    <div class="panel">
+      <h2>E-Mail-Vorlagen</h2>
+      <div class="sub">
+        Hier können alle vom Programm verwendeten E-Mail-Texte angepasst werden — sowohl die Bedarfsabfrage an die Eltern als auch die Zuteilungs- und Absage-Mails. Die unterstützten Platzhalter sind unter jedem Feld dokumentiert. Änderungen werden mit dem Stand gespeichert.
+      </div>
+      <div class="row" style="margin-bottom: 16px;">
+        <button class="btn danger" id="btnResetTemplates">Alle Vorlagen auf Standard zurücksetzen</button>
+      </div>
+      <div id="templatesEditor"></div>
+    </div>
+  </section>
+
   <!-- ============ TAB: DATEI ============ -->
   <section class="tab-content" id="tab-datei">
     <div class="panel">
@@ -1434,6 +1449,149 @@ Bitte **ändern Sie nicht die Struktur** des Antwortblocks – Sie können Zeile
 /* ---------- State ---------- */
 const DEFAULT_DAYS = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag'];
 
+/* ---------- E-Mail-Vorlagen (Defaults) ----------
+   Alle programmgenerierten E-Mails werden aus diesen Vorlagen aufgebaut.
+   Platzhalter werden bei Bedarf ersetzt; nicht vorhandene Platzhalter
+   bleiben einfach leer. Pro Vorlage sind die unterstützten Platzhalter
+   im Vorlagen-Tab dokumentiert.
+*/
+const DEFAULT_TEMPLATES = {
+  abfrageBetreff: 'Bedarfsabfrage Notbetreuung {zeitraum}',
+  abfrageBody:
+`{einleitung}
+
+Zeitraum: {zeitraum}
+Antwort bitte bis: {deadline}
+
+{antwortHinweis}
+
+============================================
+ANTWORTBLOCK – BITTE NICHT VERÄNDERN
+============================================
+{antwortblock}
+============================================
+
+Vielen Dank.
+
+{absender}`,
+  abfrageAntwortHinweis:
+`So antworten Sie am einfachsten:
+• Antworten Sie einfach auf diese E-Mail und überschreiben Sie den unten
+  stehenden Antwortblock direkt im Zitat (in der zitierten Mail) –
+  oder kopieren Sie den Block in Ihre Antwort.
+• Bitte senden Sie pro E-Mail nur EINEN Antwortblock (eine Antwort pro Kind).`,
+  abfrageTagesZeile: '{tag}: von ____:____ bis ____:____   (oder: nein)',
+
+  notifyAllocBetreff: 'Notbetreuung{zeitraumSuffix} – Zuteilung für {kindName}',
+  notifyAllocBody:
+`Liebe Eltern von {kindName},
+
+hiermit informieren wir Sie über die Notbetreuungs-Zuteilung{zeitraumSatz} für Ihr Kind {kindName}.
+
+Wir können folgende Betreuungszeiten anbieten:
+
+{allocListe}
+
+Gesamt: {gesamtStunden} Stunden{abweichungsHinweis}
+
+Bei Rückfragen oder wenn sich an Ihrem Bedarf etwas ändert, melden Sie sich bitte umgehend bei uns.{zusatz}
+
+Mit freundlichen Grüßen
+{absender}`,
+  notifyAllocZeile: '  • {tag}: {von} – {bis} Uhr  ({stunden} Std.)',
+  notifyAbweichungHinweis:
+`
+
+Hinweis: Die Zuteilung weicht teilweise von Ihrem gemeldeten Bedarf ab. Aufgrund begrenzter Kapazitäten können wir leider nicht jeden Wunsch vollständig erfüllen. Wir bemühen uns, die verfügbaren Stunden möglichst gerecht auf alle Familien zu verteilen.`,
+
+  notifyAbsageBetreff: 'Notbetreuung{zeitraumSuffix} – Ihre Anfrage',
+  notifyAbsageBody:
+`Liebe Eltern von {kindName},
+
+leider konnten wir Ihrem Kind{zeitraumSatz} keinen Platz in der Notbetreuung anbieten. Wir wissen, dass das für Sie eine schwierige Nachricht ist, und bitten um Ihr Verständnis.
+
+{bedarfsHinweis}Bei Rückfragen oder Änderungen melden Sie sich bitte gerne bei uns.{zusatz}
+
+Mit freundlichen Grüßen
+{absender}`,
+  notifyBedarfsHinweis:
+`Sie hatten folgenden Bedarf gemeldet:
+{bedarfListe}
+
+`,
+  notifyBedarfZeile: '  • {tag}: {von}–{bis}',
+};
+
+// Documentation shown next to each template field in the Vorlagen tab.
+const TEMPLATE_DOCS = {
+  abfrageBetreff: {
+    label: 'Bedarfsabfrage – Betreff',
+    vars: ['{zeitraum}'],
+  },
+  abfrageBody: {
+    label: 'Bedarfsabfrage – Mail-Text',
+    vars: ['{einleitung}', '{zeitraum}', '{deadline}', '{absender}', '{antwortHinweis}', '{antwortblock}'],
+    note: 'Der {antwortblock} enthält die maschinenlesbare Struktur und darf nicht editiert werden — nur seine Position im Text ist frei wählbar. Die {antwortHinweis} unten erklärt, wie Eltern antworten sollen.',
+  },
+  abfrageAntwortHinweis: {
+    label: 'Bedarfsabfrage – Hinweis zum Antworten',
+    vars: [],
+    note: 'Erscheint im Body über dem Antwortblock. Soll Eltern dazu anleiten, auf die Mail zu antworten oder den Block zu kopieren – und pro Mail nur einen Block zu senden.',
+  },
+  abfrageTagesZeile: {
+    label: 'Bedarfsabfrage – Tageszeile im Antwortblock',
+    vars: ['{tag}'],
+    note: 'Wird pro Wochentag in den Antwortblock eingefügt. Format muss eine vom Parser lesbare Form ergeben, z.B. mit "von … bis …" oder einer Dash-Variante.',
+  },
+
+  notifyAllocBetreff: {
+    label: 'Zuteilungs-Mail – Betreff',
+    vars: ['{zeitraum}', '{zeitraumSuffix}', '{kindName}', '{kindGruppe}'],
+    note: '{zeitraumSuffix} = " <Zeitraum>" wenn gesetzt, sonst leer (komfortabel im Betreff).',
+  },
+  notifyAllocBody: {
+    label: 'Zuteilungs-Mail – Text',
+    vars: ['{kindName}', '{kindGruppe}', '{zeitraum}', '{zeitraumSatz}', '{allocListe}', '{gesamtStunden}', '{abweichungsHinweis}', '{zusatz}', '{absender}'],
+    note: '{zeitraumSatz} = " für <Zeitraum>" wenn gesetzt, sonst leer. {abweichungsHinweis} wird nur eingefügt, wenn die Zuteilung vom Bedarf abweicht. {zusatz} ist die im Modal eingegebene Zusatzbemerkung – inklusive vorangestelltem Leerraum, sodass die Vorlage einfach …Schluss.{zusatz} schreiben kann.',
+  },
+  notifyAllocZeile: {
+    label: 'Zuteilungs-Mail – Zeile pro Tag',
+    vars: ['{tag}', '{von}', '{bis}', '{stunden}'],
+  },
+  notifyAbweichungHinweis: {
+    label: 'Zuteilungs-Mail – Hinweis bei Abweichung vom Bedarf',
+    vars: [],
+    note: 'Wird nur eingefügt, wenn die Zuteilung vom gemeldeten Bedarf abweicht.',
+  },
+
+  notifyAbsageBetreff: {
+    label: 'Absage-Mail – Betreff',
+    vars: ['{zeitraum}', '{zeitraumSuffix}', '{kindName}', '{kindGruppe}'],
+  },
+  notifyAbsageBody: {
+    label: 'Absage-Mail – Text',
+    vars: ['{kindName}', '{kindGruppe}', '{zeitraum}', '{zeitraumSatz}', '{bedarfsHinweis}', '{zusatz}', '{absender}'],
+    note: '{bedarfsHinweis} wird nur eingefügt, wenn die Eltern überhaupt einen Bedarf gemeldet hatten.',
+  },
+  notifyBedarfsHinweis: {
+    label: 'Absage-Mail – Block "Sie hatten folgenden Bedarf gemeldet"',
+    vars: ['{bedarfListe}'],
+  },
+  notifyBedarfZeile: {
+    label: 'Absage-Mail – Zeile pro gemeldetem Bedarf',
+    vars: ['{tag}', '{von}', '{bis}'],
+  },
+};
+
+// Simple {placeholder} substitution. Unknown placeholders are left in place
+// so the user notices the typo rather than getting silent empty strings.
+function renderTpl(tpl, vars) {
+  if (tpl == null) return '';
+  return String(tpl).replace(/\{(\w+)\}/g, (m, k) => {
+    return Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m;
+  });
+}
+
 const state = {
   kinder: [],         // {id, name, gruppe, vertragH, email, kumulH}
   abfrage: {
@@ -1449,8 +1607,20 @@ const state = {
   plan: {},           // kindId -> { Montag: {von, bis} | null, ... }
   standardplaene: [], // [{id, name, beschreibung, bedarfe, plan, tage, maxKinderProTag, createdAt}]
   history: [],        // [{id, ts, label, plan, snapshotKumul}]
-  meta: { lastEdit: null, version: 2 }
+  templates: { ...DEFAULT_TEMPLATES },
+  meta: { lastEdit: null, version: 3 }
 };
+
+// Replace a missing/empty template field with its default (used after load
+// so old saved states automatically get any newly-added templates).
+function ensureTemplates() {
+  if (!state.templates) state.templates = {};
+  for (const k of Object.keys(DEFAULT_TEMPLATES)) {
+    if (typeof state.templates[k] !== 'string' || state.templates[k] === '') {
+      state.templates[k] = DEFAULT_TEMPLATES[k];
+    }
+  }
+}
 
 /* ---------- IDs ---------- */
 function uid() { return 'k' + Math.random().toString(36).slice(2, 9); }
@@ -1488,6 +1658,47 @@ function intersectHours(a, b) {
   return Math.max(0, (end - start) / 60);
 }
 
+/* ---------- Flexible time parsing ----------
+   Accepts common German variants, normalizes to "HH:MM". */
+function parseTimeStr(s) {
+  if (!s) return null;
+  // Strip leading/trailing whitespace and optional "Uhr" / "h" suffix.
+  let t = String(s).trim().replace(/\s*(?:Uhr|uhr|h)\s*$/i, '').trim();
+  if (!t) return null;
+  // "9:30", "09:30", "9.30", "9,30"
+  let m = t.match(/^(\d{1,2})\s*[:.,]\s*(\d{1,2})$/);
+  if (m) {
+    const h = +m[1], mi = +m[2];
+    if (h > 23 || mi > 59) return null;
+    return `${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`;
+  }
+  // bare hour: "9", "09"
+  m = t.match(/^(\d{1,2})$/);
+  if (m) {
+    const h = +m[1];
+    if (h > 23) return null;
+    return `${String(h).padStart(2,'0')}:00`;
+  }
+  return null;
+}
+
+// Accepts e.g. "07:15-16:00", "9-14h", "9:30-14.00", "8:00 bis 14:15",
+//   "von 8 bis 14", "09:00 – 16:00" (en/em dash), "9 Uhr - 14 Uhr".
+function parseTimeRange(s) {
+  if (!s) return null;
+  let t = String(s).trim();
+  t = t.replace(/^von\s+/i, '');
+  // Allow a trailing "Uhr"/"h" that covers the whole range
+  t = t.replace(/\s*(?:Uhr|uhr|h)\s*$/i, '').trim();
+  // Separators: "bis" (word), or any dash variant
+  const parts = t.split(/\s*(?:bis|[-–—])\s*/i);
+  if (parts.length !== 2) return null;
+  const von = parseTimeStr(parts[0]);
+  const bis = parseTimeStr(parts[1]);
+  if (!von || !bis) return null;
+  return { von, bis };
+}
+
 /* ---------- Tab navigation ---------- */
 document.querySelectorAll('nav.tabs button[data-tab]').forEach(b => {
   b.addEventListener('click', () => {
@@ -1502,6 +1713,7 @@ document.querySelectorAll('nav.tabs button[data-tab]').forEach(b => {
     if (b.dataset.tab === 'historie') renderHistory();
     if (b.dataset.tab === 'datei') renderMarkdownPreview();
     if (b.dataset.tab === 'abfrage') renderMailPreview();
+    if (b.dataset.tab === 'vorlagen') renderTemplatesEditor();
   });
 });
 
@@ -1557,27 +1769,9 @@ document.getElementById('btnAddKind').addEventListener('click', () => {
 /* ===================================================================
    TAB 2: ABFRAGE
    =================================================================== */
-function buildMailTemplate() {
-  const a = state.abfrage;
-  const zeit = a.zeitraum || '[Zeitraum einfügen]';
-  const deadline = a.deadline ? new Date(a.deadline).toLocaleDateString('de-DE') : '[Datum]';
-  const absender = a.absender || '[Absender]';
-  const intro = a.einleitung || '';
-  const tagesZeilen = state.tage.map(t => {
-    return `${t.name}: von ____:____ bis ____:____   (oder: nein)`;
-  }).join('\n');
-
-  return `Betreff: Bedarfsabfrage Notbetreuung ${zeit}
-
-${intro}
-
-Zeitraum: ${zeit}
-Antwort bitte bis: ${deadline}
-
-============================================
-ANTWORTBLOCK – BITTE NICHT VERÄNDERN
-============================================
-[NOTBETREUUNG-ANTWORT v1]
+function buildAntwortblock() {
+  const tagesZeilen = state.tage.map(t => renderTpl(state.templates.abfrageTagesZeile, { tag: t.name })).join('\n');
+  return `[NOTBETREUUNG-ANTWORT v1]
 Kind: [Name des Kindes hier einfügen]
 Gruppe: [Gruppe]
 
@@ -1585,12 +1779,22 @@ ${tagesZeilen}
 
 Bemerkungen:
 ____________________________________________
-[ENDE ANTWORT]
-============================================
+[ENDE ANTWORT]`;
+}
 
-Vielen Dank.
-
-${absender}`;
+function buildMailTemplate() {
+  const a = state.abfrage;
+  const vars = {
+    zeitraum: a.zeitraum || '[Zeitraum einfügen]',
+    deadline: a.deadline ? new Date(a.deadline).toLocaleDateString('de-DE') : '[Datum]',
+    absender: a.absender || '[Absender]',
+    einleitung: a.einleitung || '',
+    antwortHinweis: state.templates.abfrageAntwortHinweis || '',
+    antwortblock: buildAntwortblock(),
+  };
+  const subject = renderTpl(state.templates.abfrageBetreff, vars);
+  const body = renderTpl(state.templates.abfrageBody, vars);
+  return `Betreff: ${subject}\n\n${body}`;
 }
 
 function renderMailPreview() {
@@ -1676,12 +1880,11 @@ document.getElementById('btnGenMailtoSingle').addEventListener('click', () => {
 async function parseMsgFile(file) {
   const buf = new Uint8Array(await file.arrayBuffer());
   try {
-    const text = extractTextFromMsg(buf);
-    return text;
+    return extractTextFromMsg(buf);
   } catch (e) {
     console.warn('msg parser failed for', file.name, e);
     // fallback: aggressive scan for utf-16le text containing our marker
-    return scanForMarker(buf);
+    return { text: scanForMarker(buf), senderEmail: '' };
   }
 }
 
@@ -1854,18 +2057,41 @@ function extractTextFromMsg(buf) {
     {tag:'1013', typ:'001E', uni:false},
     {tag:'1013', typ:'0102', uni:false}, // binary html
   ];
+  let bodyText = '';
   for (const w of want) {
     const c = candidates.find(c => c.tag === w.tag && c.typ === w.typ);
     if (c) {
       const bytes = readEntry(c.entry);
       let text = decode(bytes, w.uni);
       if (w.tag === '1013') text = stripHtml(text);
-      if (text && text.includes('[NOTBETREUUNG-ANTWORT')) return text;
-      // keep first text as fallback
-      if (text && !want._fb) want._fb = text;
+      if (text && text.includes('[NOTBETREUUNG-ANTWORT')) { bodyText = text; break; }
+      if (text && !bodyText) bodyText = text;
     }
   }
-  return want._fb || '';
+
+  // Sender SMTP address. Prefer PR_SENDER_SMTP_ADDRESS (5D01) — always SMTP
+  // even for Exchange senders. Fall back to PR_SENT_REPRESENTING_SMTP_ADDRESS
+  // (5D02), then PR_SENDER_EMAIL_ADDRESS (0C1F) and PR_SENT_REPRESENTING_EMAIL_ADDRESS
+  // (0065) which may contain Exchange "/O=.../CN=..." paths — we filter for "@".
+  const senderTags = [
+    {tag:'5D01', typ:'001F', uni:true},
+    {tag:'5D01', typ:'001E', uni:false},
+    {tag:'5D02', typ:'001F', uni:true},
+    {tag:'5D02', typ:'001E', uni:false},
+    {tag:'0C1F', typ:'001F', uni:true},
+    {tag:'0C1F', typ:'001E', uni:false},
+    {tag:'0065', typ:'001F', uni:true},
+    {tag:'0065', typ:'001E', uni:false},
+  ];
+  let senderEmail = '';
+  for (const w of senderTags) {
+    const c = candidates.find(c => c.tag === w.tag && c.typ === w.typ);
+    if (!c) continue;
+    const s = decode(readEntry(c.entry), w.uni).trim();
+    if (s && s.includes('@')) { senderEmail = s; break; }
+  }
+
+  return { text: bodyText, senderEmail };
 }
 
 function concatBytes(arr) {
@@ -1965,26 +2191,14 @@ function parseAnswerBlock(text) {
       inBemerk = false;
       const day = dayMatch[1].charAt(0).toUpperCase() + dayMatch[1].slice(1).toLowerCase();
       const rest = dayMatch[2].trim();
-      if (/^(nein|kein|keine|--+|—)/i.test(rest) || rest === '' || /von\s*_+\s*:\s*_+/i.test(rest)) {
+      if (/^(nein|kein|keine|--+|—)/i.test(rest) || rest === '' || /(?:von\s*)?_+\s*[:.]?\s*_+/i.test(rest)) {
         result.tage[day] = { none: true };
       } else {
-        const tm = rest.match(/von\s*(\d{1,2})[:\.](\d{2})\s*bis\s*(\d{1,2})[:\.](\d{2})/i);
-        if (tm) {
-          result.tage[day] = {
-            von: `${String(+tm[1]).padStart(2,'0')}:${tm[2]}`,
-            bis: `${String(+tm[3]).padStart(2,'0')}:${tm[4]}`
-          };
+        const range = parseTimeRange(rest);
+        if (range) {
+          result.tage[day] = range;
         } else {
-          // Try plain "07:30 - 14:00"
-          const tm2 = rest.match(/(\d{1,2})[:\.](\d{2})\s*[-–]\s*(\d{1,2})[:\.](\d{2})/);
-          if (tm2) {
-            result.tage[day] = {
-              von: `${String(+tm2[1]).padStart(2,'0')}:${tm2[2]}`,
-              bis: `${String(+tm2[3]).padStart(2,'0')}:${tm2[4]}`
-            };
-          } else {
-            result.tage[day] = { raw: rest };
-          }
+          result.tage[day] = { raw: rest };
         }
       }
       continue;
@@ -1995,21 +2209,32 @@ function parseAnswerBlock(text) {
   return result;
 }
 
-function findKindByAnswer(ans) {
-  // match by name (case-insensitive, ignoring extra spaces)
-  if (!ans.name) return null;
-  const norm = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
-  let candidate = state.kinder.find(k => norm(k.name) === norm(ans.name));
-  if (candidate) return candidate;
-  // partial match: all words of ans.name must be in kid.name
-  const aw = norm(ans.name).split(' ');
-  candidate = state.kinder.find(k => {
-    const kw = norm(k.name).split(' ');
-    return aw.every(w => kw.includes(w));
-  });
-  if (candidate) return candidate;
-  // last fallback: substring
-  return state.kinder.find(k => norm(k.name).includes(norm(ans.name)) || norm(ans.name).includes(norm(k.name)));
+function findKindByAnswer(ans, senderEmail) {
+  const norm = s => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (ans.name) {
+    let candidate = state.kinder.find(k => norm(k.name) === norm(ans.name));
+    if (candidate) return candidate;
+    // partial match: all words of ans.name must be in kid.name
+    const aw = norm(ans.name).split(' ').filter(Boolean);
+    if (aw.length) {
+      candidate = state.kinder.find(k => {
+        const kw = norm(k.name).split(' ');
+        return aw.every(w => kw.includes(w));
+      });
+      if (candidate) return candidate;
+    }
+    // substring (either direction)
+    candidate = state.kinder.find(k => norm(k.name).includes(norm(ans.name)) || norm(ans.name).includes(norm(k.name)));
+    if (candidate) return candidate;
+  }
+  // Last resort: match by sender email. Only used when name matching fails,
+  // so e.g. an empty/garbled "Kind:" line still finds the right family.
+  if (senderEmail && senderEmail.includes('@')) {
+    const se = senderEmail.toLowerCase().trim();
+    const byEmail = state.kinder.find(k => (k.email || '').toLowerCase().trim() === se);
+    if (byEmail) return byEmail;
+  }
+  return null;
 }
 
 /* ---------- Import UI ---------- */
@@ -2017,20 +2242,32 @@ document.getElementById('btnPickMsg').addEventListener('click', () => {
   document.getElementById('msgFiles').click();
 });
 
+// Extract a single email address from a "From: ..." header (RFC822 / .eml)
+function extractFromHeader(text) {
+  if (!text) return '';
+  const m = text.match(/^From:\s*(.+)$/mi);
+  if (!m) return '';
+  const em = m[1].match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/);
+  return em ? em[0] : '';
+}
+
 document.getElementById('msgFiles').addEventListener('change', async e => {
   const files = Array.from(e.target.files);
   if (files.length === 0) return;
   document.getElementById('importStatus').textContent = `Verarbeite ${files.length} Datei(en)…`;
   const results = [];
   for (const file of files) {
-    let text = '';
+    let text = '', senderEmail = '';
     if (file.name.toLowerCase().endsWith('.msg')) {
-      text = await parseMsgFile(file);
+      const parsed = await parseMsgFile(file);
+      text = parsed.text || '';
+      senderEmail = parsed.senderEmail || '';
     } else {
       text = await file.text();
+      senderEmail = extractFromHeader(text);
     }
     const ans = parseAnswerBlock(text);
-    results.push({ file: file.name, ans, raw: text.length });
+    results.push({ file: file.name, ans, senderEmail, raw: text.length });
   }
   applyImportResults(results);
   e.target.value = '';
@@ -2046,7 +2283,7 @@ function applyImportResults(results) {
       fail++;
       continue;
     }
-    const kind = findKindByAnswer(r.ans);
+    const kind = findKindByAnswer(r.ans, r.senderEmail);
     if (!kind) {
       out.push(`
         <div class="history-entry" style="border-color: var(--warn)">
@@ -2166,15 +2403,12 @@ function renderBedarfeView() {
       if (v === '' || /^(—|-+|nein|kein.*)$/i.test(v)) {
         state.bedarfe[k][t] = { none: true };
       } else {
-        const m = v.match(/(\d{1,2})[:\.](\d{2})\s*[-–]\s*(\d{1,2})[:\.](\d{2})/);
-        if (m) {
-          state.bedarfe[k][t] = {
-            von: `${String(+m[1]).padStart(2,'0')}:${m[2]}`,
-            bis: `${String(+m[3]).padStart(2,'0')}:${m[4]}`
-          };
+        const range = parseTimeRange(v);
+        if (range) {
+          state.bedarfe[k][t] = range;
         } else {
           state.bedarfe[k][t] = { raw: v };
-          toast('Format nicht erkannt. Erwartet z.B. 07:15-16:00', 'err');
+          toast('Format nicht erkannt. Beispiele: 07:15-16:00, 9-14h, 8:30 bis 14:30', 'err');
           return;
         }
       }
@@ -2198,7 +2432,8 @@ document.getElementById('btnPasteImport').addEventListener('click', () => {
   const results = [];
   blocks.forEach((b, i) => {
     const ans = parseAnswerBlock(b);
-    results.push({ file: `Einfügung ${i+1}`, ans, raw: b.length });
+    const senderEmail = extractFromHeader(b);
+    results.push({ file: `Einfügung ${i+1}`, ans, senderEmail, raw: b.length });
   });
   applyImportResults(results);
   document.getElementById('modalPaste').classList.remove('show');
@@ -2266,7 +2501,7 @@ function renderPlanner() {
       const need = (state.bedarfe[k.id] || {})[t.name];
       const alloc = (state.plan[k.id] || {})[t.name];
       const hasNeed = need && !need.none && need.von && need.bis;
-      const hasAlloc = alloc && alloc.von && alloc.bis;
+      const hasAlloc = !!(alloc && alloc.von && alloc.bis);
       let cls = 'slot';
       let inner = '';
       if (hasNeed && hasAlloc) cls += ' has-need has-alloc';
@@ -2305,7 +2540,7 @@ function renderPlanner() {
       if (a && a.von && a.bis) { count++; sumH += durH(a.von, a.bis); }
     }
     const over = count > state.maxKinderProTag;
-    html += `<div class="pcell summary ${over ? 'over' : ''}">${count} / ${state.maxKinderProTag}<br>${sumH.toFixed(1)}h gesamt</div>`;
+    html += `<div class="pcell summary ${over ? 'over' : ''}">${count} / ${state.maxKinderProTag}<br>${sumH.toFixed(2)}h gesamt</div>`;
   }
 
   grid.innerHTML = html;
@@ -2899,13 +3134,8 @@ const NOTIFY_DAY_FMT = { Montag:'Montag', Dienstag:'Dienstag', Mittwoch:'Mittwoc
 function buildNotifyMail(kind, zeitraum, absender, zusatz) {
   const alloc = state.plan[kind.id] || {};
   const need = state.bedarfe[kind.id] || {};
-  const lines = [];
-  const zeitTxt = zeitraum ? ` für ${zeitraum}` : '';
+  const T = state.templates;
 
-  lines.push(`Liebe Eltern von ${kind.name},`);
-  lines.push('');
-
-  // Check if any allocation exists
   let totalAllocH = 0;
   const allocDays = [];
   for (const t of state.tage) {
@@ -2916,78 +3146,63 @@ function buildNotifyMail(kind, zeitraum, absender, zusatz) {
       allocDays.push({ tag: t.name, von: a.von, bis: a.bis, hours: h });
     }
   }
+  const hasAlloc = allocDays.length > 0;
 
-  if (allocDays.length === 0) {
-    // Refusal
-    lines.push(`leider konnten wir Ihrem Kind${zeitTxt} keinen Platz in der Notbetreuung anbieten. Wir wissen, dass das für Sie eine schwierige Nachricht ist, und bitten um Ihr Verständnis.`);
-    lines.push('');
-    // Show what was requested, if any
-    let neededDays = [];
-    for (const t of state.tage) {
-      const n = need[t.name];
-      if (n && !n.none && n.von && n.bis) neededDays.push(`${t.name}: ${n.von}–${n.bis}`);
+  // Determine whether the allocation differs from the reported need (any day
+  // missed or shortened). The longer-alloc case is not flagged — that's a
+  // positive surprise for parents, not something to apologize for.
+  let abweichung = false;
+  for (const t of state.tage) {
+    const n = need[t.name];
+    const a = alloc[t.name];
+    if (n && !n.none && n.von && n.bis) {
+      if (!a || !a.von) { abweichung = true; break; }
+      if (timeToMin(a.von) > timeToMin(n.von) || timeToMin(a.bis) < timeToMin(n.bis)) { abweichung = true; break; }
     }
-    if (neededDays.length > 0) {
-      lines.push(`Sie hatten folgenden Bedarf gemeldet:`);
-      neededDays.forEach(d => lines.push(`  • ${d}`));
-      lines.push('');
-    }
-    lines.push(`Bei Rückfragen oder Änderungen melden Sie sich bitte gerne bei uns.`);
+  }
+
+  // Common variables for both subject and body.
+  const baseVars = {
+    kindName: kind.name,
+    kindGruppe: kind.gruppe || '',
+    zeitraum: zeitraum || '',
+    zeitraumSuffix: zeitraum ? ' ' + zeitraum : '',
+    zeitraumSatz: zeitraum ? ' für ' + zeitraum : '',
+    absender: (absender && absender.trim()) || '',
+    zusatz: (zusatz && zusatz.trim()) ? '\n\n' + zusatz.trim() : '',
+  };
+
+  let subject, body;
+  if (hasAlloc) {
+    const allocListe = allocDays.map(d => renderTpl(T.notifyAllocZeile, {
+      tag: d.tag,
+      von: d.von,
+      bis: d.bis,
+      stunden: d.hours.toFixed(2).replace('.', ','),
+    })).join('\n');
+    subject = renderTpl(T.notifyAllocBetreff, baseVars);
+    body = renderTpl(T.notifyAllocBody, {
+      ...baseVars,
+      allocListe,
+      gesamtStunden: totalAllocH.toFixed(2).replace('.', ','),
+      abweichungsHinweis: abweichung ? (T.notifyAbweichungHinweis || '') : '',
+    });
   } else {
-    lines.push(`hiermit informieren wir Sie über die Notbetreuungs-Zuteilung${zeitTxt} für Ihr Kind ${kind.name}.`);
-    lines.push('');
-    lines.push(`Wir können folgende Betreuungszeiten anbieten:`);
-    lines.push('');
-    for (const d of allocDays) {
-      lines.push(`  • ${d.tag}: ${d.von} – ${d.bis} Uhr  (${d.hours.toFixed(2).replace('.',',')} Std.)`);
+    const neededDays = state.tage
+      .map(t => ({ t, n: need[t.name] }))
+      .filter(x => x.n && !x.n.none && x.n.von && x.n.bis);
+    let bedarfsHinweis = '';
+    if (neededDays.length > 0) {
+      const bedarfListe = neededDays.map(({t, n}) =>
+        renderTpl(T.notifyBedarfZeile, { tag: t.name, von: n.von, bis: n.bis })
+      ).join('\n');
+      bedarfsHinweis = renderTpl(T.notifyBedarfsHinweis, { bedarfListe });
     }
-    lines.push('');
-    lines.push(`Gesamt: ${totalAllocH.toFixed(2).replace('.',',')} Stunden`);
-
-    // Compare to need
-    const diffNotes = [];
-    let hasDayWithoutAlloc = false;
-    let hasShorterAlloc = false;
-    let hasLongerAlloc = false;
-    for (const t of state.tage) {
-      const n = need[t.name];
-      const a = alloc[t.name];
-      if (n && !n.none && n.von && n.bis) {
-        if (!a || !a.von) { hasDayWithoutAlloc = true; }
-        else {
-          if (timeToMin(a.von) > timeToMin(n.von) || timeToMin(a.bis) < timeToMin(n.bis)) hasShorterAlloc = true;
-          if (timeToMin(a.von) < timeToMin(n.von) || timeToMin(a.bis) > timeToMin(n.bis)) hasLongerAlloc = true;
-        }
-      } else if ((!n || n.none) && a && a.von) {
-        // assigned a day without requested need — unusual, mention
-        diffNotes.push(`Am ${t.name} haben wir Ihnen einen Platz angeboten, obwohl Sie keinen Bedarf gemeldet hatten.`);
-      }
-    }
-    if (hasDayWithoutAlloc || hasShorterAlloc) {
-      lines.push('');
-      lines.push(`Hinweis: Die Zuteilung weicht teilweise von Ihrem gemeldeten Bedarf ab. Aufgrund begrenzter Kapazitäten können wir leider nicht jeden Wunsch vollständig erfüllen. Wir bemühen uns, die verfügbaren Stunden möglichst gerecht auf alle Familien zu verteilen.`);
-    }
-    diffNotes.forEach(n => { lines.push(''); lines.push(n); });
-    lines.push('');
-    lines.push(`Bei Rückfragen oder wenn sich an Ihrem Bedarf etwas ändert, melden Sie sich bitte umgehend bei uns.`);
+    subject = renderTpl(T.notifyAbsageBetreff, baseVars);
+    body = renderTpl(T.notifyAbsageBody, { ...baseVars, bedarfsHinweis });
   }
 
-  if (zusatz && zusatz.trim()) {
-    lines.push('');
-    lines.push(zusatz.trim());
-  }
-
-  lines.push('');
-  lines.push('Mit freundlichen Grüßen');
-  if (absender && absender.trim()) {
-    lines.push(absender.trim());
-  }
-
-  const subject = allocDays.length === 0
-    ? `Notbetreuung${zeitraum ? ' ' + zeitraum : ''} – Ihre Anfrage`
-    : `Notbetreuung${zeitraum ? ' ' + zeitraum : ''} – Zuteilung für ${kind.name}`;
-
-  return { subject, body: lines.join('\n'), hasAlloc: allocDays.length > 0 };
+  return { subject, body, hasAlloc };
 }
 
 function isPlanAccepted() {
@@ -3023,11 +3238,14 @@ document.getElementById('btnNotifyParents').addEventListener('click', () => {
   const wEl = document.getElementById('notifyWarning');
   wEl.style.display = isPlanAccepted() ? 'none' : 'block';
   renderNotifyPreviews();
+  notifyQueue = null;
+  updateNotifyOpenAllButton();
   document.getElementById('modalNotify').classList.add('show');
 });
 
 document.getElementById('btnNotifyClose').addEventListener('click', () => {
   document.getElementById('modalNotify').classList.remove('show');
+  notifyQueue = null;
 });
 
 document.getElementById('btnNotifyRefresh').addEventListener('click', renderNotifyPreviews);
@@ -3087,27 +3305,61 @@ ${esc(m.body)}</div>
   });
 }
 
+function buildMailtoLink(m) {
+  return `mailto:${encodeURIComponent(m.kind.email)}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
+}
+
 function openNotifyMail(m) {
   if (!m.kind.email || !m.kind.email.includes('@')) {
     toast(`Keine E-Mail für ${m.kind.name} hinterlegt.`, 'err');
     return;
   }
-  const link = `mailto:${encodeURIComponent(m.kind.email)}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
-  window.location.href = link;
+  window.location.href = buildMailtoLink(m);
 }
 
-document.getElementById('btnNotifyOpenAll').addEventListener('click', async () => {
-  const mails = getNotifyMails().filter(m => m.kind.email && m.kind.email.includes('@'));
-  if (mails.length === 0) { toast('Keine Mails mit gültiger Adresse vorhanden.', 'err'); return; }
-  if (!confirm(`${mails.length} Mail-Fenster werden nacheinander geöffnet (mit kurzer Pause zwischen den Aufrufen). Fortfahren?`)) return;
-  for (let i = 0; i < mails.length; i++) {
-    const m = mails[i];
-    const link = `mailto:${encodeURIComponent(m.kind.email)}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
-    window.open(link, '_blank');
-    // Small delay to avoid hammering the OS mail handler
-    await new Promise(r => setTimeout(r, 700));
+// Sequential queue: each click consumes one mail and advances. We can't loop
+// programmatically because the OS mail handler (Outlook in particular) only
+// honors one mailto: per user gesture — additional ones in the same tick are
+// silently dropped or collapsed into the first compose window.
+let notifyQueue = null;
+
+function updateNotifyOpenAllButton() {
+  const btn = document.getElementById('btnNotifyOpenAll');
+  if (!notifyQueue || notifyQueue.index >= notifyQueue.mails.length) {
+    btn.textContent = 'Nacheinander öffnen (Schritt für Schritt)';
+    btn.classList.remove('accent');
+  } else {
+    const m = notifyQueue.mails[notifyQueue.index];
+    btn.textContent = `Mail ${notifyQueue.index + 1}/${notifyQueue.mails.length} öffnen: ${m.kind.name}`;
+    btn.classList.add('accent');
   }
-  toast(`${mails.length} Mails geöffnet.`, 'ok');
+}
+
+document.getElementById('btnNotifyOpenAll').addEventListener('click', () => {
+  // Initialize or refresh the queue if it's empty/stale
+  if (!notifyQueue || notifyQueue.index >= notifyQueue.mails.length) {
+    const mails = getNotifyMails().filter(m => m.kind.email && m.kind.email.includes('@'));
+    if (mails.length === 0) { toast('Keine Mails mit gültiger Adresse vorhanden.', 'err'); return; }
+    notifyQueue = { mails, index: 0 };
+    updateNotifyOpenAllButton();
+    toast(`${mails.length} Mails in Warteschlange. Bitte erneut klicken, um jeweils die nächste zu öffnen.`, 'ok');
+    return;
+  }
+  // Open the current mail (this consumes the user gesture, so we cannot
+  // open more than one here — the user must click again for the next).
+  const m = notifyQueue.mails[notifyQueue.index];
+  window.location.href = buildMailtoLink(m);
+  notifyQueue.index++;
+  updateNotifyOpenAllButton();
+  if (notifyQueue.index >= notifyQueue.mails.length) {
+    toast('Alle Mails geöffnet.', 'ok');
+  }
+});
+
+// Reset the queue when the modal is reopened or previews change
+document.getElementById('btnNotifyRefresh').addEventListener('click', () => {
+  notifyQueue = null;
+  updateNotifyOpenAllButton();
 });
 
 /* ===================================================================
@@ -3132,6 +3384,23 @@ function serializeMd() {
   lines.push(`max_kinder_pro_tag: ${state.maxKinderProTag}`);
   lines.push('einleitung: |');
   (state.abfrage.einleitung||'').split('\n').forEach(l => lines.push('  ' + l));
+  lines.push('```');
+  lines.push('');
+
+  // Templates (E-Mail-Vorlagen)
+  lines.push('## Vorlagen');
+  lines.push('');
+  lines.push('<!-- Anpassbare E-Mail-Vorlagen. Standardwerte stehen im Quelltext (DEFAULT_TEMPLATES). -->');
+  lines.push('```yaml');
+  for (const k of Object.keys(DEFAULT_TEMPLATES)) {
+    const v = (state.templates && state.templates[k] != null) ? state.templates[k] : DEFAULT_TEMPLATES[k];
+    if (v.indexOf('\n') === -1) {
+      lines.push(`${k}: ${JSON.stringify(v)}`);
+    } else {
+      lines.push(`${k}: |`);
+      v.split('\n').forEach(l => lines.push('  ' + l));
+    }
+  }
   lines.push('```');
   lines.push('');
 
@@ -3334,6 +3603,12 @@ function deserializeMd(md) {
       if (obj.absender !== undefined) newState.abfrage.absender = obj.absender;
       if (obj.max_kinder_pro_tag !== undefined) newState.maxKinderProTag = parseInt(obj.max_kinder_pro_tag);
       if (obj.einleitung !== undefined) newState.abfrage.einleitung = obj.einleitung;
+    } else if (sec === 'templates') {
+      const obj = parseSimpleYaml(yaml);
+      newState.templates = { ...DEFAULT_TEMPLATES };
+      for (const k of Object.keys(DEFAULT_TEMPLATES)) {
+        if (obj[k] !== undefined) newState.templates[k] = obj[k];
+      }
     } else if (sec === 'bedarfe' || sec === 'bedarfeStamm') {
       const target = sec === 'bedarfeStamm' ? newState.bedarfeStamm : newState.bedarfe;
       const obj = parseNestedYaml(yaml);
@@ -3381,6 +3656,7 @@ function deserializeMd(md) {
     if (ln.startsWith('## ')) {
       const sec = ln.slice(3).trim().toLowerCase();
       if (sec.startsWith('abfrage')) section = 'abfrage';
+      else if (sec.startsWith('vorlagen')) section = 'templates';
       else if (sec.startsWith('tageszeit')) section = 'tage';
       else if (sec.startsWith('kinder')) section = 'kinder';
       else if (sec.startsWith('stamm-bedarfe') || sec.startsWith('stammbedarfe')) section = 'bedarfeStamm';
@@ -3649,6 +3925,7 @@ document.getElementById('importFile').addEventListener('change', async e => {
     const newState = deserializeMd(text);
     if (!confirm(`Stand laden? Aktuelle Daten werden ersetzt.\n\nGefunden: ${newState.kinder.length} Kinder, ${newState.history.length} Historie-Einträge.`)) return;
     Object.assign(state, newState);
+    ensureTemplates();
     markEdit();
     renderAll();
     toast('Stand geladen.', 'ok');
@@ -3678,6 +3955,58 @@ function renderMarkdownPreview() {
   document.getElementById('markdownView').textContent = serializeMd();
 }
 
+function renderTemplatesEditor() {
+  const c = document.getElementById('templatesEditor');
+  ensureTemplates();
+  // Group templates so the order in the UI is the logical flow:
+  // (1) parent inquiry, (2) allocation notice, (3) refusal notice.
+  const groups = [
+    { title: 'Bedarfsabfrage an die Eltern', keys: ['abfrageBetreff','abfrageBody','abfrageAntwortHinweis','abfrageTagesZeile'] },
+    { title: 'Zuteilungs-Mail an die Eltern', keys: ['notifyAllocBetreff','notifyAllocBody','notifyAllocZeile','notifyAbweichungHinweis'] },
+    { title: 'Absage-Mail an die Eltern',     keys: ['notifyAbsageBetreff','notifyAbsageBody','notifyBedarfsHinweis','notifyBedarfZeile'] },
+  ];
+  let html = '';
+  for (const g of groups) {
+    html += `<h3 style="font-family: var(--serif); font-size: 15px; margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line);">${esc(g.title)}</h3>`;
+    for (const key of g.keys) {
+      const doc = TEMPLATE_DOCS[key] || { label: key, vars: [] };
+      const val = state.templates[key] || '';
+      const isShort = /Betreff|Zeile/.test(key);
+      const rows = isShort ? 1 : Math.max(4, Math.min(20, val.split('\n').length + 1));
+      const varsLine = doc.vars && doc.vars.length
+        ? `Platzhalter: ${doc.vars.map(v => `<code class="kbd">${esc(v)}</code>`).join(' ')}`
+        : 'Keine Platzhalter.';
+      const noteLine = doc.note ? `<div style="margin-top: 4px; font-size: 11px; color: var(--ink-soft); font-style: italic;">${esc(doc.note)}</div>` : '';
+      html += `
+        <div class="col" style="margin-bottom: 18px;">
+          <label class="lbl">${esc(doc.label)}</label>
+          ${isShort
+            ? `<input type="text" data-tplkey="${key}" value="${esc(val)}">`
+            : `<textarea data-tplkey="${key}" rows="${rows}" style="font-family: var(--mono); font-size: 12px;">${esc(val)}</textarea>`}
+          <div style="margin-top: 4px; font-size: 11px; color: var(--ink-mute); font-family: var(--mono);">${varsLine}</div>
+          ${noteLine}
+        </div>`;
+    }
+  }
+  c.innerHTML = html;
+  c.querySelectorAll('[data-tplkey]').forEach(el => {
+    el.addEventListener('input', () => {
+      state.templates[el.dataset.tplkey] = el.value;
+      markEdit();
+      renderMailPreview();
+    });
+  });
+}
+
+document.getElementById('btnResetTemplates').addEventListener('click', () => {
+  if (!confirm('Alle E-Mail-Vorlagen wirklich auf die Standardtexte zurücksetzen? Eigene Anpassungen gehen verloren.')) return;
+  state.templates = { ...DEFAULT_TEMPLATES };
+  markEdit();
+  renderTemplatesEditor();
+  renderMailPreview();
+  toast('Vorlagen zurückgesetzt.', 'ok');
+});
+
 /* ===================================================================
    Misc
    =================================================================== */
@@ -3702,6 +4031,7 @@ function tryRestoreSession() {
   // backward-compat: ensure new fields exist on old saved sessions
   if (!state.bedarfeStamm) state.bedarfeStamm = {};
   if (!state.standardplaene) state.standardplaene = [];
+  ensureTemplates();
 }
 
 function renderAll() {
