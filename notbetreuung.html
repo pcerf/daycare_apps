@@ -1532,16 +1532,19 @@ const TEMPLATE_DOCS = {
     label: 'Bedarfsabfrage – Mail-Text',
     vars: ['{einleitung}', '{zeitraum}', '{deadline}', '{absender}', '{antwortHinweis}', '{antwortblock}'],
     note: 'Der {antwortblock} enthält die maschinenlesbare Struktur und darf nicht editiert werden — nur seine Position im Text ist frei wählbar. Die {antwortHinweis} unten erklärt, wie Eltern antworten sollen.',
+    warning: 'Der Platzhalter {antwortblock} MUSS im Text vorkommen. Er enthält die Markierungen [NOTBETREUUNG-ANTWORT v1] und [ENDE ANTWORT], an denen der Parser die Antworten erkennt. Ohne diesen Platzhalter kann keine Antwort eingelesen werden.',
   },
   abfrageAntwortHinweis: {
     label: 'Bedarfsabfrage – Hinweis zum Antworten',
     vars: [],
     note: 'Erscheint im Body über dem Antwortblock. Soll Eltern dazu anleiten, auf die Mail zu antworten oder den Block zu kopieren – und pro Mail nur einen Block zu senden.',
+    warning: 'Dieser Hinweis steuert, wie Eltern antworten. Wenn er entfernt oder verwässert wird, schicken Eltern eher Antworten in Formen, die der Parser nicht zuverlässig einlesen kann (z.B. mehrere Antwortblöcke pro Mail, oder eine veränderte Block-Struktur).',
   },
   abfrageTagesZeile: {
     label: 'Bedarfsabfrage – Tageszeile im Antwortblock',
     vars: ['{tag}'],
     note: 'Wird pro Wochentag in den Antwortblock eingefügt. Format muss eine vom Parser lesbare Form ergeben, z.B. mit "von … bis …" oder einer Dash-Variante.',
+    warning: 'Diese Zeile muss mit dem Platzhalter {tag} beginnen, direkt gefolgt von einem Doppelpunkt (z.B. "{tag}:" oder "{tag} :"). Ohne diese Struktur erkennt der Parser den Wochentag nicht und die Antwort für diesen Tag wird verworfen. Die Zeitvorgabe (z.B. "von ____:____ bis ____:____") wird von Eltern überschrieben — hier ist viel Format-Spielraum, solange das Endergebnis wie "9-14", "8:00 bis 14:30", "von 9 Uhr bis 14 Uhr", … aussieht.',
   },
 
   notifyAllocBetreff: {
@@ -1687,6 +1690,10 @@ function parseTimeStr(s) {
 function parseTimeRange(s) {
   if (!s) return null;
   let t = String(s).trim();
+  // Drop any trailing parenthetical hints like "(oder: nein)" that the
+  // template leaves in — parents often forget to delete them when filling
+  // in times. Repeat to strip multiple groups.
+  t = t.replace(/(?:\s*\([^)]*\))+\s*$/g, '').trim();
   t = t.replace(/^von\s+/i, '');
   // Allow a trailing "Uhr"/"h" that covers the whole range
   t = t.replace(/\s*(?:Uhr|uhr|h)\s*$/i, '').trim();
@@ -2170,8 +2177,20 @@ function parseAnswerBlock(text) {
   const result = { name: '', gruppe: '', tage: {}, bemerkungen: '' };
   let inBemerk = false;
   let bemerkLines = [];
-  for (const ln of lines) {
-    const line = ln.trim();
+  const DAY_ABBR = {
+    mo:'Montag', montag:'Montag',
+    di:'Dienstag', dienstag:'Dienstag',
+    mi:'Mittwoch', mittwoch:'Mittwoch',
+    do:'Donnerstag', donnerstag:'Donnerstag',
+    fr:'Freitag', freitag:'Freitag',
+    sa:'Samstag', samstag:'Samstag',
+    so:'Sonntag', sonntag:'Sonntag',
+  };
+  for (const rawLn of lines) {
+    // Strip leading mail-quote markers ("> ", ">> ", …) so replies that
+    // edit inside the quoted block still parse. Also strip leading bullet
+    // characters that some parents add when reformatting.
+    let line = rawLn.replace(/^[>\s]*>+\s*/, '').replace(/^[•*]\s+/, '').replace(/^-\s+/, '').trim();
     if (/^Kind\s*:/i.test(line)) {
       result.name = line.replace(/^Kind\s*:\s*/i, '').replace(/\[.*?\]/g,'').trim();
       continue;
@@ -2185,11 +2204,11 @@ function parseAnswerBlock(text) {
       bemerkLines.push(line.replace(/^Bemerkungen?\s*:\s*/i,''));
       continue;
     }
-    // day line: "Montag: von 07:30 bis 14:00" or "Dienstag: nein"
-    const dayMatch = line.match(/^(Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)\s*:\s*(.*)$/i);
+    // day line: "Montag: von 07:30 bis 14:00" or "Mo: nein" or "Di.: 9-14"
+    const dayMatch = line.match(/^(Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag|Mo|Di|Mi|Do|Fr|Sa|So)\.?\s*:\s*(.*)$/i);
     if (dayMatch) {
       inBemerk = false;
-      const day = dayMatch[1].charAt(0).toUpperCase() + dayMatch[1].slice(1).toLowerCase();
+      const day = DAY_ABBR[dayMatch[1].toLowerCase()] || dayMatch[1];
       const rest = dayMatch[2].trim();
       if (/^(nein|kein|keine|--+|—)/i.test(rest) || rest === '' || /(?:von\s*)?_+\s*[:.]?\s*_+/i.test(rest)) {
         result.tage[day] = { none: true };
@@ -3977,6 +3996,9 @@ function renderTemplatesEditor() {
         ? `Platzhalter: ${doc.vars.map(v => `<code class="kbd">${esc(v)}</code>`).join(' ')}`
         : 'Keine Platzhalter.';
       const noteLine = doc.note ? `<div style="margin-top: 4px; font-size: 11px; color: var(--ink-soft); font-style: italic;">${esc(doc.note)}</div>` : '';
+      const warningLine = doc.warning
+        ? `<div style="margin-top: 6px; padding: 8px 10px; background: #fbeae6; border-left: 3px solid var(--bad); border-radius: 0 var(--r) var(--r) 0; font-size: 12px; color: var(--bad); line-height: 1.45;"><strong>⚠ Achtung — Parser-relevant:</strong> ${esc(doc.warning)}</div>`
+        : '';
       html += `
         <div class="col" style="margin-bottom: 18px;">
           <label class="lbl">${esc(doc.label)}</label>
@@ -3985,6 +4007,7 @@ function renderTemplatesEditor() {
             : `<textarea data-tplkey="${key}" rows="${rows}" style="font-family: var(--mono); font-size: 12px;">${esc(val)}</textarea>`}
           <div style="margin-top: 4px; font-size: 11px; color: var(--ink-mute); font-family: var(--mono);">${varsLine}</div>
           ${noteLine}
+          ${warningLine}
         </div>`;
     }
   }

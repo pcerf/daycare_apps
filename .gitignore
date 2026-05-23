@@ -50,3 +50,6 @@ desktop.ini
 .claude/
 .Claude/
 CLAUDE.md
+
+# Tests
+test_parser.mjs
