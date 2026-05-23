@@ -1,0 +1,3736 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Notbetreuungs-Planer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* ---------- Design tokens ---------- */
+  :root {
+    --bg: #f4f1ea;
+    --bg-card: #fbf9f4;
+    --bg-elev: #ffffff;
+    --ink: #1c1c1a;
+    --ink-soft: #5a554c;
+    --ink-mute: #8a8478;
+    --line: #d9d3c5;
+    --line-soft: #e6e1d4;
+    --accent: #8b3a1f;
+    --accent-soft: #c97a5a;
+    --good: #2f6d3a;
+    --warn: #9c6f00;
+    --bad: #a32a1a;
+    --shadow: 0 1px 0 rgba(0,0,0,0.04), 0 4px 16px rgba(40,30,15,0.06);
+    --shadow-lift: 0 4px 24px rgba(40,30,15,0.14);
+    --r: 4px;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- Header ---------- */
+  header.app {
+    background: var(--ink);
+    color: var(--bg);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    border-bottom: 3px solid var(--accent);
+  }
+  header.app h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 19px;
+    letter-spacing: 0.2px;
+    margin: 0;
+  }
+  header.app h1 span.acc { color: var(--accent-soft); }
+  header.app .meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #b9b2a3;
+    margin-left: auto;
+    letter-spacing: 0.4px;
+  }
+
+  /* ---------- Tabs ---------- */
+  nav.tabs {
+    display: flex;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--line);
+    padding: 0 24px;
+    gap: 2px;
+  }
+  nav.tabs button {
+    background: transparent;
+    border: 0;
+    padding: 14px 18px 12px;
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    letter-spacing: 0.2px;
+  }
+  nav.tabs button:hover { color: var(--ink); }
+  nav.tabs button.active {
+    color: var(--ink);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+  nav.tabs .spacer { flex: 1; }
+  nav.tabs .toolbar {
+    display: flex; gap: 8px; align-items: center;
+    padding: 8px 0;
+  }
+
+  /* ---------- Buttons ---------- */
+  button.btn {
+    background: var(--ink);
+    color: var(--bg);
+    border: 1px solid var(--ink);
+    padding: 7px 14px;
+    border-radius: var(--r);
+    font-family: var(--sans);
+    font-size: 12px;
+    cursor: pointer;
+    letter-spacing: 0.2px;
+  }
+  button.btn:hover { background: #2a2a26; }
+  button.btn.ghost {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  button.btn.ghost:hover { background: var(--bg-card); border-color: var(--ink-mute); }
+  button.btn.accent { background: var(--accent); border-color: var(--accent); }
+  button.btn.accent:hover { background: #732e17; }
+  button.btn.danger { background: transparent; color: var(--bad); border-color: var(--line); }
+  button.btn.danger:hover { border-color: var(--bad); background: #fbeae6; }
+  button.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ---------- Layout ---------- */
+  main { padding: 24px; max-width: 1600px; margin: 0 auto; }
+  .panel {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+  }
+  .panel h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 16px;
+    margin: 0 0 4px 0;
+    letter-spacing: 0.1px;
+  }
+  .panel .sub {
+    color: var(--ink-soft);
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .row.gap-lg { gap: 24px; }
+  .col { display: flex; flex-direction: column; gap: 6px; }
+
+  label.lbl {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--ink-mute);
+    font-weight: 600;
+  }
+  input[type="text"], input[type="number"], input[type="time"], input[type="date"], textarea, select {
+    font-family: var(--sans);
+    font-size: 13px;
+    padding: 7px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: var(--bg-elev);
+    color: var(--ink);
+  }
+  textarea { font-family: var(--mono); font-size: 12px; resize: vertical; }
+  input:focus, textarea:focus, select:focus {
+    outline: 2px solid var(--accent-soft);
+    outline-offset: -1px;
+    border-color: var(--accent);
+  }
+
+  /* ---------- Tables ---------- */
+  table.data {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-elev);
+    font-size: 13px;
+  }
+  table.data th {
+    text-align: left;
+    background: var(--bg-card);
+    color: var(--ink-soft);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  table.data td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: middle;
+  }
+  table.data tr:hover td { background: #fdfbf5; }
+  table.data input[type="text"], table.data input[type="number"] {
+    padding: 4px 6px;
+    font-size: 13px;
+    width: 100%;
+  }
+
+  /* ---------- Planner grid (drag and drop) ---------- */
+  .planner-wrap { overflow-x: auto; }
+  .planner {
+    display: grid;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    min-width: 900px;
+  }
+  .planner .pcell {
+    background: var(--bg-elev);
+    padding: 8px;
+    min-height: 60px;
+  }
+  .planner .pcell.header {
+    background: var(--bg-card);
+    font-weight: 600;
+    text-align: center;
+    padding: 10px 8px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .planner .pcell.namecell {
+    background: var(--bg-card);
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1.3;
+  }
+  .planner .pcell.namecell .kid-name {
+    font-weight: 600;
+    font-family: var(--serif);
+    font-size: 14px;
+  }
+  .planner .pcell.namecell .kid-grp {
+    font-size: 11px;
+    color: var(--ink-mute);
+    font-family: var(--mono);
+    letter-spacing: 0.3px;
+  }
+  .planner .pcell.namecell .kid-stats {
+    margin-top: 6px;
+    font-size: 11px;
+  }
+  .planner .pcell.summary {
+    background: #f0eddf;
+    padding: 6px 8px;
+    font-size: 11px;
+    text-align: center;
+    color: var(--ink-soft);
+    font-family: var(--mono);
+  }
+  .planner .pcell.summary.over { background: #f4dcd7; color: var(--bad); }
+
+  .slot {
+    border: 1px dashed transparent;
+    border-radius: var(--r);
+    padding: 4px 6px;
+    cursor: grab;
+    font-size: 12px;
+    background: var(--bg-elev);
+    min-height: 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    position: relative;
+    transition: background 0.1s;
+  }
+  .slot.empty {
+    background: #fafaf3;
+    border-color: var(--line-soft);
+    color: var(--ink-mute);
+    text-align: center;
+    cursor: pointer;
+  }
+  .slot.empty:hover { background: #f4f1e2; border-color: var(--ink-mute); }
+  .slot.has-need.has-alloc { background: #e8efe2; border-color: #b9d1a8; }
+  .slot.has-need:not(.has-alloc) { background: #fbf4dc; border-color: #e0c977; }
+  .slot.no-need.has-alloc { background: #f4e1d6; border-color: #d4a37a; }
+  .slot.drag-over { background: #ffd9b8 !important; border: 1px dashed var(--accent) !important; }
+  .slot.dragging { opacity: 0.4; }
+  .slot .times {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 11px;
+  }
+  .slot .badge {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--ink-mute);
+    font-family: var(--mono);
+  }
+  .slot .x {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    font-size: 10px;
+    color: var(--ink-mute);
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 4px;
+  }
+  .slot .x:hover { color: var(--bad); }
+  .slot .need-info {
+    font-size: 10px;
+    color: var(--ink-mute);
+    font-family: var(--mono);
+  }
+
+  /* ---------- Coverage bar ---------- */
+  .cov-bar {
+    height: 6px;
+    background: var(--line-soft);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+    margin-top: 4px;
+  }
+  .cov-bar > div {
+    height: 100%;
+    background: var(--good);
+    transition: width 0.2s;
+  }
+  .cov-bar.warn > div { background: var(--warn); }
+  .cov-bar.bad > div { background: var(--bad); }
+  .cov-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-soft);
+    letter-spacing: 0.3px;
+  }
+
+  /* ---------- Modal ---------- */
+  .modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(20,15,5,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--bg-elev);
+    border-radius: var(--r);
+    padding: 24px;
+    max-width: 540px;
+    width: 100%;
+    box-shadow: var(--shadow-lift);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal h3 {
+    font-family: var(--serif);
+    margin: 0 0 12px;
+    font-size: 18px;
+  }
+  .modal .field { margin-bottom: 12px; }
+  .modal .field label { display: block; margin-bottom: 4px; }
+
+  /* ---------- Misc ---------- */
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-family: var(--mono);
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+  }
+  .pill.good { background: #e8efe2; border-color: #b9d1a8; color: var(--good); }
+  .pill.warn { background: #fbf4dc; border-color: #e0c977; color: var(--warn); }
+  .pill.bad { background: #f4dcd7; border-color: #d4a37a; color: var(--bad); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .empty-state {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--ink-mute);
+    font-family: var(--serif);
+    font-style: italic;
+    border: 1px dashed var(--line);
+    border-radius: var(--r);
+    background: var(--bg-elev);
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--ink);
+    color: var(--bg);
+    padding: 12px 18px;
+    border-radius: var(--r);
+    box-shadow: var(--shadow-lift);
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    transform: translateY(10px);
+    z-index: 2000;
+    max-width: 400px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.err { background: var(--bad); }
+  .toast.ok { background: var(--good); }
+
+  details.coll {
+    margin-top: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 8px 12px;
+    background: var(--bg-elev);
+  }
+  details.coll summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+  details.coll[open] { padding-bottom: 12px; }
+
+  code.kbd {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--bg-card);
+    padding: 2px 6px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+  }
+
+  .legend {
+    display: flex; gap: 14px; flex-wrap: wrap;
+    font-size: 11px; color: var(--ink-soft);
+    margin-top: 12px;
+  }
+  .legend .lg-item { display: flex; align-items: center; gap: 5px; }
+  .legend .sw {
+    width: 12px; height: 12px;
+    border-radius: 2px;
+    border: 1px solid var(--line);
+  }
+
+  .history-entry {
+    border-left: 3px solid var(--accent-soft);
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    background: var(--bg-elev);
+    border-radius: 0 var(--r) var(--r) 0;
+  }
+  .history-entry .hist-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-mute);
+  }
+  .history-entry .hist-actions { margin-top: 8px; }
+
+  .privacy-note {
+    background: #e8efe2;
+    border-left: 3px solid var(--good);
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: #2a4a30;
+    border-radius: 0 var(--r) var(--r) 0;
+  }
+
+  /* ---------- Anleitung ---------- */
+  .panel p.lead {
+    font-family: var(--serif);
+    font-size: 15px;
+    color: var(--ink);
+    margin: 16px 0 8px;
+  }
+  .anl-ol {
+    margin: 0;
+    padding-left: 22px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .anl-ol li { margin-bottom: 6px; }
+
+  .anl-step {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px dashed var(--line-soft);
+  }
+  .anl-step:last-child { border-bottom: 0; }
+  .anl-num {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    color: var(--bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .anl-step h3 {
+    font-family: var(--serif);
+    font-size: 15px;
+    margin: 4px 0 8px;
+    font-weight: 600;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .anl-step h3 .anl-tab {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--ink-mute);
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: none;
+    letter-spacing: 0.2px;
+  }
+  .anl-step p { margin: 6px 0; font-size: 13px; line-height: 1.55; }
+  .anl-step ul { font-size: 13px; line-height: 1.6; padding-left: 20px; }
+  .anl-step ul li { margin-bottom: 4px; }
+  .anl-tip {
+    background: #fbf4dc;
+    border-left: 3px solid #c79c2f;
+    padding: 8px 12px;
+    margin: 10px 0 4px;
+    font-size: 12px;
+    color: #5d4515;
+    border-radius: 0 var(--r) var(--r) 0;
+  }
+
+  /* SVG flowchart */
+  .flowchart-wrap {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 12px;
+    overflow-x: auto;
+  }
+  .flowchart {
+    width: 100%;
+    max-width: 900px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    font-family: var(--sans);
+  }
+  .flowchart .lane-lbl {
+    font-family: var(--serif);
+    font-size: 12px;
+    fill: var(--ink-soft);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .flowchart .step rect {
+    fill: var(--bg-elev);
+    stroke: var(--accent);
+    stroke-width: 1.5;
+  }
+  .flowchart .step.external rect {
+    stroke: var(--ink-mute);
+    stroke-dasharray: 4 3;
+  }
+  .flowchart .step.file-step rect {
+    stroke: var(--good);
+  }
+  .flowchart .step-title {
+    font-size: 13px;
+    fill: var(--ink);
+    font-weight: 600;
+  }
+  .flowchart .step-sub {
+    font-size: 10px;
+    fill: var(--ink-mute);
+    font-family: var(--mono);
+  }
+  .flowchart .loop-lbl {
+    font-size: 10px;
+    fill: var(--accent);
+    font-style: italic;
+  }
+  .flowchart .side-lbl {
+    font-size: 9px;
+    fill: var(--ink-mute);
+    font-family: var(--mono);
+  }
+
+  /* Notify cards */
+  .notify-card {
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: var(--bg-elev);
+  }
+  .notify-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* FAQ */
+  details.faq {
+    border-bottom: 1px solid var(--line-soft);
+    padding: 10px 0;
+  }
+  details.faq:last-child { border-bottom: 0; }
+  details.faq summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 13px;
+    padding: 4px 0;
+    list-style: none;
+    position: relative;
+    padding-left: 22px;
+  }
+  details.faq summary::-webkit-details-marker { display: none; }
+  details.faq summary::before {
+    content: '+';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-weight: 700;
+  }
+  details.faq[open] summary::before { content: '−'; }
+  details.faq summary:hover { color: var(--accent); }
+  details.faq p, details.faq ul {
+    margin: 8px 0 8px 22px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+  }
+  details.faq ul { padding-left: 18px; }
+</style>
+</head>
+<body>
+
+<header class="app">
+  <h1>Notbetreuungs<span class="acc">·</span>Planer</h1>
+  <div class="meta" id="metaInfo">— · —</div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="anleitung" class="active">Anleitung</button>
+  <button data-tab="kinder">Kinder</button>
+  <button data-tab="abfrage">Bedarfsabfrage</button>
+  <button data-tab="import">Antworten importieren</button>
+  <button data-tab="planer">Planer</button>
+  <button data-tab="standard">Standardpläne</button>
+  <button data-tab="historie">Historie</button>
+  <button data-tab="datei">Datei</button>
+  <div class="spacer"></div>
+  <div class="toolbar">
+    <button class="btn ghost" id="btnQuickExport" title="Aktuellen Stand exportieren">⇣ Stand exportieren</button>
+  </div>
+</nav>
+
+<main>
+
+  <!-- ============ TAB: ANLEITUNG ============ -->
+  <section class="tab-content active" id="tab-anleitung">
+
+    <div class="panel">
+      <h2>Worum geht es?</h2>
+      <div class="sub">Dieses Programm hilft der Kita-Leitung, Notbetreuung fair und nachvollziehbar zu planen — etwa bei Streik, Personalausfall oder Pandemie. Es läuft komplett im Browser, keine Daten verlassen Ihren Computer.</div>
+
+      <p class="lead">In drei Sätzen:</p>
+      <ol class="anl-ol">
+        <li>Sie fragen den <strong>Betreuungsbedarf der Eltern per E-Mail</strong> ab — das Programm erstellt die Mail-Vorlage.</li>
+        <li>Sie sammeln die Antwort-E-Mails, exportieren sie aus Outlook und <strong>importieren sie hier</strong>.</li>
+        <li>Das Programm macht einen <strong>Verteilungs-Vorschlag</strong>, den Sie per Drag &amp; Drop anpassen können — fertig.</li>
+      </ol>
+    </div>
+
+    <div class="panel">
+      <h2>Zwei Arbeitsweisen</h2>
+      <div class="sub">Das Programm unterstützt zwei Vorgehen, die sich kombinieren lassen. Wählen Sie die für Ihre Situation passende.</div>
+
+      <h3 style="font-family: var(--serif); font-size: 14px; margin: 16px 0 6px;">A) Mit Standardplänen — schnell anwendbar, ohne Abfrage</h3>
+      <p style="font-size: 13px; margin-bottom: 12px;">Geeignet, wenn Sie zu Schuljahresbeginn die Bedarfe einmal erfassen und für typische Notbetreuungs-Szenarien (z.B. „Kernzeit", „Halber Personalschlüssel") fertige Pläne ablegen. Im Ernstfall: einen Standardplan wählen — fertig.</p>
+
+      <div class="flowchart-wrap" style="margin-bottom: 24px;">
+        <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" class="flowchart" role="img" aria-label="Workflow Standardpläne">
+          <defs>
+            <marker id="arrowhead-b" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+              <path d="M0,0 L9,3 L0,6 Z" fill="#5a554c"/>
+            </marker>
+            <marker id="arrowhead-accent-b" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+              <path d="M0,0 L9,3 L0,6 Z" fill="#8b3a1f"/>
+            </marker>
+          </defs>
+
+          <!-- Lanes -->
+          <rect x="20" y="40" width="860" height="120" fill="#f0eddf" rx="4"/>
+          <text x="35" y="60" class="lane-lbl">Einmalig zu Schuljahresbeginn</text>
+
+          <rect x="20" y="180" width="860" height="180" fill="#fbf4dc" rx="4"/>
+          <text x="35" y="200" class="lane-lbl">Im Notfall</text>
+
+          <!-- Step 1: Schuljahresabfrage -->
+          <g class="step external">
+            <rect x="60" y="75" width="200" height="55" rx="3"/>
+            <text x="160" y="98" text-anchor="middle" class="step-title">Schuljahres-Abfrage</text>
+            <text x="160" y="118" text-anchor="middle" class="step-sub">→ per E-Mail an Eltern</text>
+          </g>
+
+          <line x1="265" y1="102" x2="335" y2="102" stroke="#5a554c" stroke-width="1.5" marker-end="url(#arrowhead-b)"/>
+
+          <!-- Step 2: In Stamm speichern -->
+          <g class="step">
+            <rect x="340" y="75" width="200" height="55" rx="3"/>
+            <text x="440" y="98" text-anchor="middle" class="step-title">Als Stamm-Bedarfe</text>
+            <text x="440" y="118" text-anchor="middle" class="step-sub">Tab „Antworten" · Button ↑</text>
+          </g>
+
+          <line x1="545" y1="102" x2="615" y2="102" stroke="#5a554c" stroke-width="1.5" marker-end="url(#arrowhead-b)"/>
+
+          <!-- Step 3: Standardpläne anlegen -->
+          <g class="step">
+            <rect x="620" y="75" width="220" height="55" rx="3"/>
+            <text x="730" y="98" text-anchor="middle" class="step-title">Standardpläne anlegen</text>
+            <text x="730" y="118" text-anchor="middle" class="step-sub">N Vorlagen für Szenarien</text>
+          </g>
+
+          <!-- Arrow down from Standardpläne to Notfall -->
+          <line x1="730" y1="135" x2="730" y2="215" stroke="#5a554c" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="800" y="175" class="side-lbl">vorbereitet</text>
+
+          <!-- Notfall: Standardplan wählen -->
+          <g class="step">
+            <rect x="620" y="220" width="220" height="55" rx="3"/>
+            <text x="730" y="243" text-anchor="middle" class="step-title">Standardplan anwenden</text>
+            <text x="730" y="263" text-anchor="middle" class="step-sub">Tab „Planer" · Dropdown</text>
+          </g>
+
+          <line x1="619" y1="247" x2="545" y2="247" stroke="#5a554c" stroke-width="1.5" marker-end="url(#arrowhead-b)"/>
+
+          <!-- Anpassen -->
+          <g class="step">
+            <rect x="340" y="220" width="200" height="55" rx="3"/>
+            <text x="440" y="243" text-anchor="middle" class="step-title">ggf. anpassen</text>
+            <text x="440" y="263" text-anchor="middle" class="step-sub">Drag &amp; Drop</text>
+          </g>
+
+          <line x1="440" y1="280" x2="440" y2="295" stroke="#5a554c" stroke-width="1.5" marker-end="url(#arrowhead-b)"/>
+
+          <!-- Plan annehmen -->
+          <g class="step">
+            <rect x="340" y="300" width="200" height="50" rx="3"/>
+            <text x="440" y="320" text-anchor="middle" class="step-title">Plan in Historie</text>
+            <text x="440" y="340" text-anchor="middle" class="step-sub">→ Stunden zählen</text>
+          </g>
+        </svg>
+      </div>
+
+      <h3 style="font-family: var(--serif); font-size: 14px; margin: 24px 0 6px;">B) Mit aktueller Abfrage — wenn aktuelle Bedarfe nötig sind</h3>
+      <p style="font-size: 13px; margin-bottom: 12px;">Geeignet bei spontanen oder veränderten Situationen, in denen Sie die Eltern erneut fragen müssen. Die Antworten können temporär für diese Situation, dauerhaft als neue Stamm-Bedarfe, oder als Grundlage für einen neuen Standardplan dienen.</p>
+
+      <div class="flowchart-wrap">
+        <svg viewBox="0 0 900 700" xmlns="http://www.w3.org/2000/svg" class="flowchart" role="img" aria-label="Workflow akute Abfrage">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+              <path d="M0,0 L9,3 L0,6 Z" fill="#5a554c"/>
+            </marker>
+            <marker id="arrowhead-accent" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+              <path d="M0,0 L9,3 L0,6 Z" fill="#8b3a1f"/>
+            </marker>
+          </defs>
+
+          <!-- Background swimlanes -->
+          <rect x="20" y="40" width="860" height="100" fill="#f0eddf" rx="4"/>
+          <text x="35" y="60" class="lane-lbl">Vorbereitung</text>
+
+          <rect x="20" y="160" width="860" height="180" fill="#e8efe2" rx="4"/>
+          <text x="35" y="180" class="lane-lbl">Abfrage &amp; Sammlung</text>
+
+          <rect x="20" y="360" width="860" height="180" fill="#fbf4dc" rx="4"/>
+          <text x="35" y="380" class="lane-lbl">Planung</text>
+
+          <rect x="20" y="560" width="860" height="120" fill="#f4e1d6" rx="4"/>
+          <text x="35" y="580" class="lane-lbl">Sichern &amp; Wiederverwenden</text>
+
+          <!-- Boxes -->
+          <!-- Step 1: Kinder anlegen -->
+          <g class="step" data-step="1">
+            <rect x="60" y="75" width="200" height="55" rx="3"/>
+            <text x="160" y="98" text-anchor="middle" class="step-title">1. Kinder erfassen</text>
+            <text x="160" y="118" text-anchor="middle" class="step-sub">Tab „Kinder" · einmalig</text>
+          </g>
+
+          <!-- Arrow -->
+          <line x1="160" y1="135" x2="160" y2="195" stroke="#5a554c" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+          <!-- Step 2: Abfrage -->
+          <g class="step" data-step="2">
+            <rect x="60" y="200" width="200" height="55" rx="3"/>
+            <text x="160" y="223" text-anchor="middle" class="step-title">2. Abfrage-Mail erstellen</text>
+            <text x="160" y="243" text-anchor="middle" class="step-sub">Tab „Bedarfsabfrage"</text>
+          </g>
+
+          <!-- Arrow right -->
+          <line x1="265" y1="227" x2="395" y2="227" stroke="#5a554c" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+          <!-- External step: Eltern antworten -->
+          <g class="step external" data-step="ext">
+            <rect x="400" y="200" width="200" height="55" rx="3"/>
+            <text x="500" y="223" text-anchor="middle" class="step-title">Eltern antworten</text>
+            <text x="500" y="243" text-anchor="middle" class="step-sub">per E-Mail (Outlook)</text>
+          </g>
+
+          <!-- Arrow right -->
+          <line x1="605" y1="227" x2="735" y2="227" stroke="#5a554c" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+          <!-- Step 3: Export -->
+          <g class="step external" data-step="ext2">
+            <rect x="740" y="200" width="140" height="55" rx="3"/>
+            <text x="810" y="223" text-anchor="middle" class="step-title">Outlook-Export</text>
+            <text x="810" y="243" text-anchor="middle" class="step-sub">als .msg-Dateien</text>
+          </g>
+
+          <!-- Arrow down -->
+          <line x1="810" y1="260" x2="810" y2="295" stroke="#5a554c" stroke-width="1.5"/>
+          <line x1="810" y1="295" x2="500" y2="295" stroke="#5a554c" stroke-width="1.5"/>
+          <line x1="500" y1="295" x2="500" y2="395" stroke="#8b3a1f" stroke-width="2" marker-end="url(#arrowhead-accent)"/>
+
+          <!-- Step 4: Import -->
+          <g class="step" data-step="3">
+            <rect x="400" y="275" width="200" height="55" rx="3"/>
+            <text x="500" y="298" text-anchor="middle" class="step-title">3. Antworten importieren</text>
+            <text x="500" y="318" text-anchor="middle" class="step-sub">Tab „Antworten importieren"</text>
+          </g>
+
+          <!-- Step 5: Plan generate -->
+          <g class="step" data-step="4">
+            <rect x="400" y="400" width="200" height="55" rx="3"/>
+            <text x="500" y="423" text-anchor="middle" class="step-title">4. Vorschlag berechnen</text>
+            <text x="500" y="443" text-anchor="middle" class="step-sub">Tab „Planer" · Button</text>
+          </g>
+
+          <!-- Arrow down -->
+          <line x1="500" y1="460" x2="500" y2="475" stroke="#5a554c" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+          <!-- Step 6: Adjust -->
+          <g class="step" data-step="5">
+            <rect x="400" y="480" width="200" height="55" rx="3"/>
+            <text x="500" y="503" text-anchor="middle" class="step-title">5. Manuell anpassen</text>
+            <text x="500" y="523" text-anchor="middle" class="step-sub">Drag &amp; Drop · Klicken</text>
+          </g>
+
+          <!-- Arrow down to save -->
+          <line x1="500" y1="540" x2="500" y2="595" stroke="#5a554c" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+          <!-- Step 7: Save plan -->
+          <g class="step" data-step="6">
+            <rect x="400" y="600" width="200" height="55" rx="3"/>
+            <text x="500" y="623" text-anchor="middle" class="step-title">6. Plan annehmen</text>
+            <text x="500" y="643" text-anchor="middle" class="step-sub">→ wandert in Historie</text>
+          </g>
+
+          <!-- Arrow back to top (loop for next emergency: goes to email step, not kid registration) -->
+          <path d="M 600 627 Q 870 627 870 145 Q 870 60 160 60 L 160 195" fill="none" stroke="#8b3a1f" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrowhead-accent)"/>
+          <rect x="688" y="350" width="170" height="28" fill="#f4f1ea" rx="2"/>
+          <text x="773" y="368" text-anchor="middle" class="loop-lbl">↻ Nächstes Mal: Stunden</text>
+          <text x="773" y="380" text-anchor="middle" class="loop-lbl" style="font-size: 9px; font-style: normal;">fließen in Fairness ein</text>
+
+          <!-- File export -->
+          <g class="step file-step" data-step="file">
+            <rect x="660" y="600" width="200" height="55" rx="3"/>
+            <text x="760" y="623" text-anchor="middle" class="step-title">Datei speichern (.md)</text>
+            <text x="760" y="643" text-anchor="middle" class="step-sub">jederzeit · Tab „Datei"</text>
+          </g>
+
+          <!-- Arrow from accept to file -->
+          <line x1="605" y1="627" x2="655" y2="627" stroke="#5a554c" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+          <!-- Side arrow: edit Bedarfe manually possible -->
+          <line x1="395" y1="302" x2="320" y2="302" stroke="#5a554c" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="357" y="294" text-anchor="middle" class="side-lbl">manuell</text>
+          <text x="357" y="318" text-anchor="middle" class="side-lbl">korrigierbar</text>
+        </svg>
+      </div>
+
+      <div class="legend" style="margin-top: 12px;">
+        <div class="lg-item"><span class="sw" style="background:#fbf9f4; border-color: #8b3a1f"></span> Aktion in diesem Programm</div>
+        <div class="lg-item"><span class="sw" style="background:#fbf9f4; border-color: #b9b2a3; border-style: dashed"></span> Aktion außerhalb (Outlook, Eltern)</div>
+        <div class="lg-item"><span class="sw" style="background: none; border: none">↻</span> Schleife: erneutes Durchlaufen mit neuem Anlass</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Schritt für Schritt</h2>
+
+      <div class="anl-step">
+        <div class="anl-num">1</div>
+        <div>
+          <h3>Kinderstammdaten anlegen <span class="anl-tab">Tab „Kinder"</span></h3>
+          <p>Tragen Sie jedes Kind <strong>einmal</strong> ein: Name, Gruppe, vertraglich vereinbarte Betreuungszeit pro Woche (in Stunden, z.B. 35 für eine 35h-Buchung), und die E-Mail-Adresse der Eltern.</p>
+          <p>Das Feld <em>„Kumul. Notbetr. (h)"</em> bleibt zunächst auf 0. Es zählt mit, wie viele Notbetreuungs-Stunden ein Kind im Laufe der Zeit insgesamt schon hatte — damit künftige Vorschläge fair bleiben.</p>
+          <div class="anl-tip"><strong>Tipp:</strong> Wenn Sie das Programm erst nach einigen Notbetreuungen einführen, können Sie hier auch Anfangswerte eintragen, um die bisherige Verteilung zu berücksichtigen.</div>
+        </div>
+      </div>
+
+      <div class="anl-step">
+        <div class="anl-num">2</div>
+        <div>
+          <h3>Abfrage-Mail erstellen und versenden <span class="anl-tab">Tab „Bedarfsabfrage"</span></h3>
+          <p>Tragen Sie den Zeitraum ein (z.B. „KW 23 (02.06.–06.06.2025)"), die Antwort-Deadline und Ihren Absendernamen. Den Einleitungstext können Sie an Ihre Kita anpassen.</p>
+          <p>Mit <em>„Mailto-Link öffnen (alle Eltern)"</em> öffnet sich Ihr Mailprogramm mit allen Eltern im <strong>BCC</strong> (nicht sichtbar untereinander — wichtig für den Datenschutz). Mit <em>„Einzeln pro Kind"</em> wird für jedes Kind ein eigenes Mail-Fenster geöffnet, in dem Name und Gruppe schon eingetragen sind.</p>
+          <div class="anl-tip"><strong>Wichtig:</strong> Die Eltern dürfen den <code class="kbd">[NOTBETREUUNG-ANTWORT v1]</code>-Block in ihrer Antwort nicht verändern, sonst kann das Programm die Antwort später nicht automatisch zuordnen. Das steht auch in der Mail-Anleitung an die Eltern.</div>
+        </div>
+      </div>
+
+      <div class="anl-step">
+        <div class="anl-num">3</div>
+        <div>
+          <h3>Antworten sammeln und importieren <span class="anl-tab">Tab „Antworten importieren"</span></h3>
+          <p>In Outlook markieren Sie die eingegangenen Antwort-Mails und ziehen sie per Drag &amp; Drop in einen Ordner auf Ihrem Computer — Outlook erzeugt dabei <code class="kbd">.msg</code>-Dateien. Alternativ: Rechtsklick auf eine Mail → „Speichern unter…" → Dateityp <em>Outlook-Nachrichtenformat (.msg)</em>.</p>
+          <p>Klicken Sie hier auf <em>„.msg-Dateien wählen…"</em> und markieren Sie alle .msg-Dateien gleichzeitig. Das Programm liest jede Datei aus und ordnet die Antwort dem richtigen Kind zu (Namensabgleich).</p>
+          <p>Konnten manche Antworten nicht eindeutig zugeordnet werden (z.B. weil die Eltern den Namen anders geschrieben haben), erscheint ein Auswahl-Feld zum manuellen Zuordnen.</p>
+          <p>In der Tabelle <em>„Aktuelle Bedarfe"</em> sehen Sie alle Eingänge auf einen Blick. Sie können hier auch direkt korrigieren oder fehlende Bedarfe manuell eintragen (Format: <code class="kbd">07:15-16:00</code> oder leer für „kein Bedarf").</p>
+          <div class="anl-tip"><strong>Wenn .msg nicht funktioniert:</strong> Manche Outlook-Versionen verschlüsseln oder modifizieren das Format. Notfalls können Sie den Antwortblock aus einer Mail per Strg+C kopieren und über <em>„Antwort als Text einfügen"</em> einfügen. Mehrere Antworten trennen Sie mit einer Zeile aus <code class="kbd">---</code>.</div>
+        </div>
+      </div>
+
+      <div class="anl-step">
+        <div class="anl-num">4</div>
+        <div>
+          <h3>Stamm-Bedarfe pflegen <span class="anl-tab">Tab „Antworten importieren"</span></h3>
+          <p><strong>Stamm-Bedarfe</strong> sind die zu Schuljahresbeginn dauerhaft erfassten Bedarfe pro Kind — die Grundlage für alle späteren Standardpläne. Sie sind getrennt von den <strong>aktuellen Bedarfen</strong>, die für eine konkrete Notbetreuungs-Situation gelten.</p>
+          <p>Über den Bedarfen sehen Sie zwei Buttons:</p>
+          <ul>
+            <li><strong>↑ Aktuelle Bedarfe als Stamm speichern:</strong> Übernimmt die nun eingegangenen Eltern-Antworten dauerhaft als Stamm-Bedarfe. Typisch nach der Schuljahresabfrage.</li>
+            <li><strong>↓ Stamm-Bedarfe laden:</strong> Lädt die Stamm-Bedarfe wieder in die aktuelle Tabelle. Typisch zu Beginn einer Notbetreuungs-Situation, wenn Sie keine neue Abfrage starten wollen.</li>
+          </ul>
+          <p>Beide Buttons sind <strong>optional</strong>: Wenn Sie immer mit neuer Abfrage arbeiten möchten, können Sie Stamm-Bedarfe ignorieren.</p>
+        </div>
+      </div>
+
+      <div class="anl-step">
+        <div class="anl-num">5</div>
+        <div>
+          <h3>Standardpläne anlegen <span class="anl-tab">Tab „Standardpläne"</span></h3>
+          <p>Ein <strong>Standardplan</strong> ist eine wiederverwendbare Vorlage aus Bedarfen + zugehöriger Verteilung — perfekt für typische Szenarien wie „Vollbetreuung", „Notbetreuung Kernzeiten" oder „Halber Personalschlüssel".</p>
+          <p>Vorgehen:</p>
+          <ol>
+            <li>Im Planer einen Plan vorbereiten (Vorschlag berechnen oder manuell zusammenstellen)</li>
+            <li>In Tab „Standardpläne" auf <em>„Aktuellen Stand als Standardplan speichern"</em> klicken</li>
+            <li>Name und optional Beschreibung eingeben</li>
+          </ol>
+          <p>Sie können beliebig viele Standardpläne anlegen. Jeder ist eigenständig und kann unabhängig bearbeitet, aktualisiert oder gelöscht werden.</p>
+          <div class="anl-tip"><strong>Tipp:</strong> Standardpläne wirken sich <strong>nicht</strong> auf die kumulierten Notbetreuungs-Stunden aus. Erst beim tatsächlichen Annehmen eines Plans („Plan in Historie speichern") werden die Stunden gezählt.</div>
+        </div>
+      </div>
+
+      <div class="anl-step">
+        <div class="anl-num">6</div>
+        <div>
+          <h3>Standardplan im Notfall anwenden <span class="anl-tab">Tab „Planer" oder Tab „Standardpläne"</span></h3>
+          <p>Bei einer akuten Notbetreuungs-Situation öffnen Sie den Planer. Ganz oben sehen Sie das Panel <em>„Schnellstart: Standardplan anwenden"</em> (sofern Sie mindestens einen Standardplan angelegt haben).</p>
+          <p>Standardplan wählen → <em>„Anwenden"</em> → fertig. Der Planer wird komplett mit den Bedarfen und dem Plan aus der Vorlage gefüllt. Sie können nun:</p>
+          <ul>
+            <li>direkt zu Schritt 8 (Plan annehmen) übergehen, oder</li>
+            <li>per Drag &amp; Drop individuelle Anpassungen vornehmen, oder</li>
+            <li>eine zusätzliche, neue Bedarfsabfrage starten (Schritte 2-3), und deren Antworten temporär in den geladenen Plan einarbeiten.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="anl-step">
+        <div class="anl-num">7</div>
+        <div>
+          <h3>Vorschlag berechnen und anpassen <span class="anl-tab">Tab „Planer"</span></h3>
+          <p>Wenn Sie keinen Standardplan verwenden oder den geladenen Plan komplett neu berechnen möchten: Stellen Sie oben die Öffnungszeit pro Tag und die maximale Kinderzahl pro Tag ein. Mit <em>„Vorschlag berechnen"</em> erzeugt das Programm einen Verteilungs-Vorschlag.</p>
+          <p>Der Algorithmus priorisiert Kinder, die bisher wenig Notbetreuung hatten, gegenüber Kindern mit viel kumulativer Zeit — gemessen in Prozent vom vertraglichen Umfang. So bekommen über mehrere Notbetreuungs-Situationen hinweg alle Kinder einen ähnlich großen Anteil.</p>
+          <p>Im Wochenplan sehen Sie für jedes Kind:</p>
+          <ul>
+            <li><strong>Bedarfsdeckung:</strong> Wie viel des gemeldeten Bedarfs ist im aktuellen Plan abgedeckt? (grün ≥85%, gelb 50–84%, rot &lt;50%)</li>
+            <li><strong>Notbetr. kumul.:</strong> Wie viele Stunden hatte das Kind insgesamt schon — in Prozent seines Vertrags.</li>
+          </ul>
+          <p>Sie können jeden Slot:</p>
+          <ul>
+            <li><strong>Verschieben</strong> per Drag &amp; Drop auf einen anderen Tag oder zu einem anderen Kind (Zellen werden getauscht)</li>
+            <li><strong>Neu zuweisen</strong> per Klick auf eine leere Zelle</li>
+            <li><strong>Entfernen</strong> per Klick auf das ✕ in der oberen rechten Ecke</li>
+          </ul>
+          <p>Unten in jeder Tagesspalte sehen Sie die <strong>Σ-Zeile</strong>: aktuelle Belegung des Tages und Gesamtstunden. Wenn die Höchstgrenze überschritten wird, färbt sich die Zelle rot.</p>
+        </div>
+      </div>
+
+      <div class="anl-step">
+        <div class="anl-num">8</div>
+        <div>
+          <h3>Plan annehmen und in Historie speichern <span class="anl-tab">Tab „Planer" · Button</span></h3>
+          <p>Sind Sie zufrieden, klicken Sie auf <em>„Plan in Historie speichern"</em>. Sie geben dem Plan eine Bezeichnung (z.B. „KW 23"). Das Programm:</p>
+          <ul>
+            <li>legt einen Schnappschuss des Plans in der Historie ab</li>
+            <li>addiert die zugeteilten Stunden auf die kumulativen Werte jedes Kindes</li>
+          </ul>
+          <p>Beim nächsten Notbetreuungs-Anlass berücksichtigt der Vorschlag-Algorithmus diese Werte automatisch.</p>
+          <div class="anl-tip"><strong>Tipp:</strong> Wenn Sie einen besonders gelungenen Plan haben, können Sie ihn zusätzlich als <strong>neuen Standardplan</strong> ablegen — siehe Schritt 5.</div>
+        </div>
+      </div>
+
+      <div class="anl-step">
+        <div class="anl-num">9</div>
+        <div>
+          <h3>Stand sichern und wieder einlesen <span class="anl-tab">Tab „Datei"</span></h3>
+          <p>Der gesamte Zustand (Kinder, Stamm-Bedarfe, aktuelle Bedarfe, Plan, Standardpläne, Historie) wird über <em>„Stand exportieren"</em> als <code class="kbd">.md</code>-Datei gespeichert. Das ist eine Textdatei, die Sie auf einem geschützten Laufwerk ablegen können.</p>
+          <p>Beim nächsten Öffnen des Programms — egal ob auf demselben oder einem anderen Computer — laden Sie die Datei mit <em>„Stand aus Datei laden"</em>.</p>
+          <div class="anl-tip"><strong>Wichtig:</strong> Das Programm speichert die Daten <strong>nicht automatisch dauerhaft</strong>. Wenn Sie den Browser schließen und keine Datei exportiert haben, gehen Ihre Änderungen verloren. Sichern Sie also <strong>regelmäßig</strong>.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Häufige Fragen</h2>
+
+      <details class="faq">
+        <summary>Was ist der Unterschied zwischen Stamm-Bedarfen, aktuellen Bedarfen und Standardplänen?</summary>
+        <p><strong>Stamm-Bedarfe</strong> sind die zu Schuljahresbeginn dauerhaft hinterlegten Bedarfe pro Kind. Sie ändern sich selten.</p>
+        <p><strong>Aktuelle Bedarfe</strong> sind die für die aktuelle Notbetreuungs-Situation geltenden Bedarfe. Sie können aus den Stamm-Bedarfen geladen, aus E-Mail-Antworten importiert oder manuell eingetragen werden.</p>
+        <p><strong>Standardpläne</strong> sind komplette Vorlagen, bestehend aus Bedarfen + Verteilungs-Plan. Im Notfall können Sie einen Standardplan per Klick anwenden — ohne neue Abfrage.</p>
+      </details>
+
+      <details class="faq">
+        <summary>Wie erstelle ich mehrere Standardpläne für unterschiedliche Szenarien?</summary>
+        <p>Für jedes Szenario einzeln: (1) Bedarfe für das Szenario in den Planer laden (z.B. aus Stamm laden, dann ggf. anpassen), (2) <em>„Vorschlag berechnen"</em>, (3) Plan anpassen, (4) im Tab „Standardpläne" <em>„Aktuellen Stand als Standardplan speichern"</em> klicken und benennen. Wiederholen Sie das für jeden Szenarientyp.</p>
+        <p>Typische Standardpläne: „Vollbetreuung" (alle Stamm-Bedarfe), „Notbetreuung Kernzeiten" (8:00–13:00), „Halber Personalschlüssel" (nur 50% der Kinder), „Sommerferien-Reduktion" usw.</p>
+      </details>
+
+      <details class="faq">
+        <summary>Was passiert, wenn ich einen Standardplan anwende?</summary>
+        <p>Die aktuellen Bedarfe, der Plan, die Öffnungszeiten und die Max.-Kinder-pro-Tag-Grenze werden mit den Werten aus dem Standardplan überschrieben. <strong>Nicht</strong> verändert werden: Stamm-Bedarfe, Kinderstammdaten, Historie und kumulative Notbetreuungs-Stunden.</p>
+        <p>Wenn Sie den geladenen Standardplan dann anpassen und mit „Plan in Historie speichern" annehmen, fließen die Stunden ganz normal in die kumulativen Werte ein. Der Standardplan selbst bleibt unverändert.</p>
+      </details>
+
+      <details class="faq">
+        <summary>Kann ich einen Standardplan später ändern?</summary>
+        <p>Ja. Im Tab „Standardpläne" gibt es bei jedem Eintrag zwei Bearbeitungs-Buttons: <em>„Umbenennen / Beschreiben"</em> ändert nur Name und Beschreibung. <em>„Mit aktuellem Stand aktualisieren"</em> überschreibt den gesamten Standardplan mit den jetzt im Planer aktiven Bedarfen und dem aktuellen Plan — praktisch, um eine bereits angewendete und feinjustierte Variante zurück in den Standardplan zu schreiben.</p>
+      </details>
+
+      <details class="faq">
+        <summary>Kann ich Eltern-Antworten dauerhaft in die Stamm-Bedarfe übernehmen?</summary>
+        <p>Ja. Nach dem Import der Antworten (Tab „Antworten importieren") finden Sie über der Bedarfe-Tabelle den Button <em>„↑ Aktuelle Bedarfe als Stamm speichern"</em>. Damit werden die Antworten dauerhaft als Schuljahres-Bedarfe übernommen. Bestehende Stamm-Bedarfe für Kinder ohne neue Daten bleiben erhalten.</p>
+      </details>
+
+      <details class="faq">
+        <summary>Werden meine Daten irgendwo gespeichert?</summary>
+        <p>Während Sie das Programm geöffnet halten, werden die Daten im Kurzzeit-Speicher Ihres Browsers gehalten (sessionStorage). Sobald Sie den Tab oder den Browser schließen, sind die Daten weg — es sei denn, Sie haben über Tab „Datei" eine <code class="kbd">.md</code>-Datei exportiert. Es werden keine Daten an Server gesendet, keine Cookies gesetzt, keine externen Schriften oder Skripte geladen.</p>
+      </details>
+
+      <details class="faq">
+        <summary>Was passiert, wenn ein Kind im Vorschlag gar keine Zeit bekommt?</summary>
+        <p>Das passiert, wenn die Tageskapazität (max. Kinder pro Tag) nicht ausreicht, um alle Bedürftigen unterzubringen. Der Algorithmus bevorzugt Kinder mit niedrigem kumulativen Anteil — das heißt, ein Kind, das schon viel Notbetreuung hatte, kann diesmal leer ausgehen, damit ein anderes Kind den Anschluss findet. Sie können das jederzeit manuell überstimmen, indem Sie Slots verschieben.</p>
+      </details>
+
+      <details class="faq">
+        <summary>Kann ich Tageszeiten flexibel ändern, z.B. weil eine Erzieherin früher gehen muss?</summary>
+        <p>Ja. Im Tab „Planer" oben können Sie pro Tag die Von-/Bis-Zeit anpassen. Diese Änderung wirkt sich auf neue Vorschläge aus. Bereits zugeteilte Slots bleiben unverändert; klicken Sie sie zum Verkürzen einzeln an.</p>
+      </details>
+
+      <details class="faq">
+        <summary>Was mache ich, wenn Eltern den Antwortblock kaputt machen?</summary>
+        <p>Wenn der Import-Algorithmus den Antwortblock nicht findet, sehen Sie eine Fehlermeldung im Import-Tab. Sie haben dann zwei Optionen: (1) den Antwortblock manuell sauber abschreiben und über „Antwort als Text einfügen" importieren, oder (2) direkt in der Tabelle „Erfasste Bedarfe" die Zeiten eintragen.</p>
+      </details>
+
+      <details class="faq">
+        <summary>Was ist, wenn ein Kind die Kita verlässt?</summary>
+        <p>Im Tab „Kinder" klicken Sie auf „Entfernen". Damit gehen auch die zugehörigen Bedarfe und der aktuelle Plan-Eintrag des Kindes verloren — die Historie bleibt aber erhalten (verweist dann auf „unbekannt: …").</p>
+      </details>
+
+      <details class="faq">
+        <summary>Kann ich einen alten Plan zurückholen?</summary>
+        <p>Im Tab „Historie" finden Sie alle früher angenommenen Pläne. Jeder Eintrag hat einen Button „In aktuellen Plan laden" — der aktuelle Plan wird damit überschrieben (mit Bestätigungsabfrage). Möchten Sie einen Eintrag komplett rückgängig machen, gibt es auch „Entfernen &amp; Stunden abziehen" — dann werden die kumulativen Stunden der betroffenen Kinder wieder reduziert.</p>
+      </details>
+
+      <details class="faq">
+        <summary>Was bedeuten die Farben im Planer?</summary>
+        <ul>
+          <li><span class="sw" style="background:#e8efe2; border:1px solid #b9d1a8; display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: middle"></span> <strong>Grün:</strong> Bedarf gemeldet UND Zuteilung vorhanden — passt.</li>
+          <li><span class="sw" style="background:#fbf4dc; border:1px solid #e0c977; display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: middle"></span> <strong>Gelb:</strong> Bedarf gemeldet, aber noch keine Zuteilung — Kind wartet auf Platz.</li>
+          <li><span class="sw" style="background:#f4e1d6; border:1px solid #d4a37a; display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: middle"></span> <strong>Lachsfarben:</strong> Zuteilung erfolgt, aber kein Bedarf gemeldet — eventuell ein Versehen?</li>
+          <li><span class="sw" style="background:#fafaf3; border:1px dashed #d9d3c5; display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: middle"></span> <strong>Beige:</strong> Leerer Slot — anklicken, um manuell zuzuweisen.</li>
+        </ul>
+      </details>
+
+      <details class="faq">
+        <summary>Brauche ich Internet?</summary>
+        <p>Nein. Sie können diese HTML-Datei auf Ihrem Computer speichern (z.B. auf dem Desktop oder einem USB-Stick) und per Doppelklick öffnen. Das Programm läuft komplett offline — das ist eine bewusste Datenschutz-Entscheidung.</p>
+      </details>
+    </div>
+
+  </section>
+
+  <section class="tab-content" id="tab-kinder">
+    <div class="panel">
+      <h2>Kinderstammdaten</h2>
+      <div class="sub">Name, Gruppe, vertraglicher Betreuungsumfang (Stunden pro Woche) und E-Mail der Eltern. Diese Daten verlassen den Browser nicht.</div>
+
+      <div class="privacy-note">
+        <strong>Datenschutz:</strong> Alle Daten bleiben lokal im Browser-Speicher. Es werden keine Server-Anfragen gemacht, keine Tracker geladen. Zum Sichern: Tab „Datei" → Export.
+      </div>
+
+      <table class="data" id="kinderTable">
+        <thead>
+          <tr>
+            <th style="width: 22%">Name</th>
+            <th style="width: 14%">Gruppe</th>
+            <th style="width: 14%">Vertrag (h/Wo)</th>
+            <th style="width: 30%">E-Mail Eltern</th>
+            <th style="width: 14%">Kumul. Notbetr. (h)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="kinderTbody"></tbody>
+      </table>
+
+      <div class="row" style="margin-top: 14px;">
+        <button class="btn" id="btnAddKind">+ Kind hinzufügen</button>
+        <span class="pill" id="kinderCount">0 Kinder</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB: ABFRAGE ============ -->
+  <section class="tab-content" id="tab-abfrage">
+    <div class="panel">
+      <h2>Bedarfsabfrage per E-Mail</h2>
+      <div class="sub">Vorlage für eine standardisierte Abfrage. Eltern füllen den Antwortblock aus und senden per Mail zurück. Outlook-Export der Antworten als .msg → Import-Tab.</div>
+
+      <div class="row gap-lg" style="margin-bottom: 16px;">
+        <div class="col" style="flex: 1; min-width: 250px;">
+          <label class="lbl">Zeitraum-Bezeichnung</label>
+          <input type="text" id="abfrageZeitraum" placeholder="z.B. KW 23 (02.06.–06.06.2025)">
+        </div>
+        <div class="col" style="flex: 1; min-width: 200px;">
+          <label class="lbl">Antwort-Deadline</label>
+          <input type="date" id="abfrageDeadline">
+        </div>
+        <div class="col" style="flex: 1; min-width: 200px;">
+          <label class="lbl">Absender (Anzeige im Text)</label>
+          <input type="text" id="abfrageAbsender" placeholder="z.B. Kita-Leitung, Frau Müller">
+        </div>
+      </div>
+
+      <div class="col" style="margin-bottom: 16px;">
+        <label class="lbl">Einleitungstext (kann angepasst werden)</label>
+        <textarea id="abfrageEinleitung" rows="9">Liebe Eltern,
+
+aufgrund der aktuellen Situation müssen wir Notbetreuung organisieren. Bitte teilen Sie uns Ihren Bedarf für den unten genannten Zeitraum mit, indem Sie den Antwortblock unten ausfüllen und an uns zurücksenden.
+
+Bitte **ändern Sie nicht die Struktur** des Antwortblocks – Sie können Zeilen leer lassen oder mit „nein" markieren, wenn Sie an dem Tag keinen Bedarf haben.
+
+**Zeitformat:** Bitte tragen Sie die Uhrzeiten im 24-Stunden-Format mit Doppelpunkt ein, also HH:MM (z.B. 07:15 oder 14:30). Eine vollständige Zeile sieht z.B. so aus:
+   Montag: von 07:30 bis 14:00</textarea>
+      </div>
+
+      <div class="row">
+        <button class="btn accent" id="btnGenMailto">Mailto-Link öffnen (alle Eltern)</button>
+        <button class="btn ghost" id="btnCopyTemplate">Vorlage in Zwischenablage</button>
+        <button class="btn ghost" id="btnGenMailtoSingle">Einzeln pro Kind (mailto je Empfänger)</button>
+      </div>
+
+      <details class="coll" style="margin-top: 16px;">
+        <summary>Vorschau der generierten Mail</summary>
+        <pre id="mailPreview" style="white-space: pre-wrap; font-family: var(--mono); font-size: 11px; margin-top: 10px; padding: 12px; background: var(--bg-card); border-radius: var(--r); max-height: 400px; overflow-y: auto;"></pre>
+      </details>
+    </div>
+  </section>
+
+  <!-- ============ TAB: IMPORT ============ -->
+  <section class="tab-content" id="tab-import">
+    <div class="panel">
+      <h2>Antworten importieren</h2>
+      <div class="sub">.msg-Dateien aus Outlook (mehrere gleichzeitig möglich). Der Antwortblock wird automatisch erkannt und dem passenden Kind zugeordnet.</div>
+
+      <div class="row" style="margin-bottom: 12px;">
+        <input type="file" id="msgFiles" accept=".msg,.eml,.txt" multiple style="display:none">
+        <button class="btn accent" id="btnPickMsg">.msg-Dateien wählen…</button>
+        <button class="btn ghost" id="btnPasteText">Antwort als Text einfügen</button>
+        <span class="pill" id="importStatus">Bereit</span>
+      </div>
+
+      <div id="importResults"></div>
+
+      <details class="coll" style="margin-top: 16px;">
+        <summary>So sieht ein erwarteter Antwortblock aus</summary>
+        <pre id="exampleBlock" style="white-space: pre-wrap; font-family: var(--mono); font-size: 11px; margin-top: 10px; padding: 12px; background: var(--bg-card); border-radius: var(--r);"></pre>
+      </details>
+    </div>
+
+    <div class="panel">
+      <h2>Aktuelle Bedarfe</h2>
+      <div class="sub">
+        Die hier eingetragenen Bedarfe verwendet der Planer. Sie können entweder aus E-Mail-Antworten stammen, manuell erfasst sein, oder aus den Stamm-Bedarfen (Schuljahresabfrage) geladen werden.
+      </div>
+
+      <div class="row" style="margin-bottom: 12px;">
+        <button class="btn ghost" id="btnLoadStamm" title="Stamm-Bedarfe aus der Schuljahresabfrage in die aktuelle Tabelle übernehmen">↓ Stamm-Bedarfe laden</button>
+        <button class="btn ghost" id="btnSaveStamm" title="Aktuelle Bedarfe permanent als Stamm-Bedarfe speichern">↑ Aktuelle Bedarfe als Stamm speichern</button>
+        <button class="btn ghost" id="btnClearAkut" title="Aktuelle Bedarfe leeren (Stamm bleibt erhalten)">Tabelle leeren</button>
+        <span class="pill" id="stammStatus" style="margin-left: auto;">—</span>
+      </div>
+
+      <div id="bedarfeView"></div>
+    </div>
+  </section>
+
+  <!-- ============ TAB: STANDARDPLAENE ============ -->
+  <section class="tab-content" id="tab-standard">
+    <div class="panel">
+      <h2>Standardpläne</h2>
+      <div class="sub">
+        Standardpläne sind vorgefertigte Vorlagen mit Bedarfen und einer Verteilung, die Sie in einer akuten Situation per Klick anwenden können — ohne neue Elternabfrage. Typische Beispiele: „Vollbetreuung", „Notbetreuung Kernzeiten", „Halber Personalschlüssel".
+      </div>
+
+      <div class="row" style="margin-bottom: 14px;">
+        <button class="btn accent" id="btnNewStandard">+ Aktuellen Stand als Standardplan speichern</button>
+        <span class="pill" id="standardCount">0 Standardpläne</span>
+      </div>
+
+      <div id="standardList"></div>
+
+      <details class="coll" style="margin-top: 16px;">
+        <summary>Was unterscheidet einen Standardplan von der Historie?</summary>
+        <p style="margin: 8px 0; font-size: 12px; color: var(--ink-soft);">
+          <strong>Standardpläne</strong> sind wiederverwendbare Vorlagen. Sie wirken sich nicht auf die kumulativen Stunden der Kinder aus und können beliebig oft angewendet werden.<br>
+          <strong>Historie</strong> sind tatsächlich durchgeführte Notbetreuungen. Sie werden chronologisch geführt und beeinflussen die Fairness-Berechnung künftiger Vorschläge.
+        </p>
+      </details>
+    </div>
+  </section>
+
+  <!-- ============ TAB: PLANER ============ -->
+  <section class="tab-content" id="tab-planer">
+    <div class="panel" id="standardQuickPanel">
+      <h2>Schnellstart: Standardplan anwenden</h2>
+      <div class="sub">Bei einer akuten Notbetreuung können Sie hier einen vorbereiteten Standardplan in den Planer laden — ohne neue Elternabfrage.</div>
+      <div class="row">
+        <select id="standardSelect" style="min-width: 280px;">
+          <option value="">— Standardplan wählen —</option>
+        </select>
+        <button class="btn accent" id="btnApplyStandard">Anwenden</button>
+        <span style="font-size: 11px; color: var(--ink-mute); margin-left: 8px;">Lädt Bedarfe + Plan + Tageszeiten</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Tageszeiten konfigurieren</h2>
+      <div class="sub">Die Kita kann die Öffnungszeit jedes Tages individuell setzen. Default 07:15 – 16:00.</div>
+      <div id="tageConfig"></div>
+
+      <div class="row" style="margin-top: 12px;">
+        <div class="col">
+          <label class="lbl">Max. Kinder pro Tag (gesamt)</label>
+          <input type="number" id="maxKinderProTag" value="20" min="1" style="width: 100px">
+        </div>
+        <button class="btn accent" id="btnAutoplan" style="margin-top: 16px">Vorschlag berechnen</button>
+        <button class="btn ghost" id="btnClearPlan" style="margin-top: 16px">Plan leeren</button>
+        <button class="btn ghost" id="btnAcceptPlan" style="margin-top: 16px">Plan in Historie speichern</button>
+        <button class="btn ghost" id="btnNotifyParents" style="margin-top: 16px" title="Eltern per E-Mail über die Zuteilung informieren">Eltern per E-Mail informieren</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Wochenplan</h2>
+      <div class="sub">
+        Per Drag &amp; Drop verschieben. Klick auf leere Zelle, um manuell zuzuweisen. Klick auf × zum Entfernen.
+      </div>
+      <div class="legend">
+        <div class="lg-item"><span class="sw" style="background:#e8efe2"></span> Bedarf &amp; Zuteilung</div>
+        <div class="lg-item"><span class="sw" style="background:#fbf4dc"></span> Bedarf, keine Zuteilung</div>
+        <div class="lg-item"><span class="sw" style="background:#f4e1d6"></span> Zuteilung ohne gemeldeten Bedarf</div>
+        <div class="lg-item"><span class="sw" style="background:#fafaf3"></span> leer</div>
+      </div>
+
+      <div class="planner-wrap" style="margin-top: 16px;">
+        <div class="planner" id="plannerGrid"></div>
+      </div>
+
+      <div class="row" style="margin-top: 16px; font-size: 12px; color: var(--ink-soft);">
+        <div>
+          <strong>Bedarfsdeckung pro Kind:</strong> Anteil der gemeldeten Notbedarf-Stunden, der im aktuellen Plan abgedeckt ist.
+        </div>
+        <div>
+          <strong>Notbetreuung kumul.:</strong> Summe aller bislang akzeptierten Notbetreuungs-Stunden in Prozent des vertraglichen Wochenumfangs.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB: HISTORIE ============ -->
+  <section class="tab-content" id="tab-historie">
+    <div class="panel">
+      <h2>Historie angenommener Pläne</h2>
+      <div class="sub">Jeder akzeptierte Plan wird hier festgehalten. Die kumulierten Notbetreuungs-Stunden pro Kind fließen in die Fairness-Berechnung künftiger Vorschläge ein.</div>
+      <div id="historyList"></div>
+    </div>
+  </section>
+
+  <!-- ============ TAB: DATEI ============ -->
+  <section class="tab-content" id="tab-datei">
+    <div class="panel">
+      <h2>Stand speichern und laden</h2>
+      <div class="sub">
+        Der komplette Zustand (Kinder, Bedarfe, Plan, Historie) wird in einer menschenlesbaren Markdown-Datei gespeichert. Sie können sie auch im Texteditor öffnen und manuell korrigieren.
+      </div>
+      <div class="row">
+        <button class="btn accent" id="btnExport">Aktuellen Stand exportieren (.md)</button>
+        <input type="file" id="importFile" accept=".md,.markdown,.txt" style="display:none">
+        <button class="btn" id="btnImportFile">Stand aus Datei laden</button>
+        <button class="btn danger" id="btnReset">Alles zurücksetzen</button>
+      </div>
+
+      <details class="coll" style="margin-top: 20px;">
+        <summary>Aktueller Stand als Markdown anzeigen</summary>
+        <pre id="markdownView" style="white-space: pre-wrap; font-family: var(--mono); font-size: 11px; margin-top: 10px; padding: 12px; background: var(--bg-card); border-radius: var(--r); max-height: 500px; overflow-y: auto;"></pre>
+      </details>
+    </div>
+
+    <div class="panel">
+      <h2>Hinweise zum Datenschutz</h2>
+      <div class="sub">
+        Diese Anwendung läuft vollständig im Browser. Sie sendet keine Daten an Server, lädt keine externen Skripte oder Schriftarten. Sie können die HTML-Datei lokal speichern und offline verwenden. Speichern Sie regelmäßig den Stand als .md-Datei an einem geschützten Ort (z.B. verschlüsseltes Laufwerk).
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Modal: Slot bearbeiten -->
+<div class="modal-bg" id="modalSlot">
+  <div class="modal">
+    <h3>Betreuungszeit zuweisen</h3>
+    <div id="modalSlotInfo" style="font-size: 12px; color: var(--ink-soft); margin-bottom: 12px;"></div>
+    <div class="field">
+      <label class="lbl">Von</label>
+      <input type="time" id="slotVon">
+    </div>
+    <div class="field">
+      <label class="lbl">Bis</label>
+      <input type="time" id="slotBis">
+    </div>
+    <div class="row" style="justify-content: flex-end; margin-top: 16px;">
+      <button class="btn ghost" id="btnSlotCancel">Abbrechen</button>
+      <button class="btn accent" id="btnSlotSave">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Text-Antwort einfügen -->
+<div class="modal-bg" id="modalPaste">
+  <div class="modal" style="max-width: 700px;">
+    <h3>Antwort als Text einfügen</h3>
+    <p style="font-size: 12px; color: var(--ink-soft);">Fügen Sie hier den Inhalt einer Antwort-Mail ein. Mehrere Antworten können getrennt durch <code class="kbd">---</code> eingefügt werden.</p>
+    <textarea id="pasteArea" rows="14" style="width: 100%;"></textarea>
+    <div class="row" style="justify-content: flex-end; margin-top: 12px;">
+      <button class="btn ghost" id="btnPasteCancel">Abbrechen</button>
+      <button class="btn accent" id="btnPasteImport">Importieren</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Eltern informieren -->
+<div class="modal-bg" id="modalNotify">
+  <div class="modal" style="max-width: 800px; max-height: 92vh;">
+    <h3>Eltern per E-Mail informieren</h3>
+    <p style="font-size: 12px; color: var(--ink-soft); margin-bottom: 12px;">
+      Für jedes Kind wird eine eigene E-Mail erzeugt. Kinder ohne Zuteilung erhalten eine Absage-Mail.
+      Prüfen Sie die Vorschauen unten und öffnen Sie die Mails einzeln oder alle nacheinander.
+    </p>
+
+    <div id="notifyWarning" style="display:none; background: #fbf4dc; border-left: 3px solid #c79c2f; padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: #5d4515; border-radius: 0 var(--r) var(--r) 0;">
+      <strong>Warnung:</strong> Der aktuelle Plan wurde noch nicht über „Plan in Historie speichern" angenommen. Sie versenden also Mails zu einem Entwurf, der noch nicht verbindlich ist. Sind Sie sicher?
+    </div>
+
+    <div class="row gap-lg" style="margin-bottom: 14px;">
+      <div class="col" style="flex: 1; min-width: 200px;">
+        <label class="lbl">Zeitraum-Bezeichnung</label>
+        <input type="text" id="notifyZeitraum" placeholder="z.B. KW 23 (02.06.–06.06.)">
+      </div>
+      <div class="col" style="flex: 1; min-width: 180px;">
+        <label class="lbl">Absender (im Text)</label>
+        <input type="text" id="notifyAbsender" placeholder="z.B. Kita-Leitung">
+      </div>
+    </div>
+
+    <div class="col" style="margin-bottom: 12px;">
+      <label class="lbl">Zusätzlicher Text (optional, erscheint am Ende vor der Unterschrift)</label>
+      <textarea id="notifyZusatz" rows="3" placeholder="z.B. Bitte bringen Sie Wechselkleidung mit. Bei Fragen melden Sie sich gerne." style="font-family: var(--sans); font-size: 13px;"></textarea>
+    </div>
+
+    <div class="row" style="margin-bottom: 14px; align-items: center;">
+      <button class="btn accent" id="btnNotifyRefresh">Vorschauen aktualisieren</button>
+      <button class="btn" id="btnNotifyOpenAll">Alle nacheinander öffnen</button>
+      <span class="pill" id="notifySummary" style="margin-left: auto;">—</span>
+    </div>
+
+    <div id="notifyPreviewList" style="border-top: 1px solid var(--line); padding-top: 12px;"></div>
+
+    <div class="row" style="justify-content: flex-end; margin-top: 16px;">
+      <button class="btn ghost" id="btnNotifyClose">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================================================================
+   NOTBETREUUNGS-PLANER
+   Single-file, no CDN, no external dependencies.
+   =================================================================== */
+
+/* ---------- State ---------- */
+const DEFAULT_DAYS = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag'];
+
+const state = {
+  kinder: [],         // {id, name, gruppe, vertragH, email, kumulH}
+  abfrage: {
+    zeitraum: '',
+    deadline: '',
+    absender: '',
+    einleitung: ''
+  },
+  bedarfeStamm: {},   // kindId -> { Montag: {...}, ... } - jährliche Grundbedarfe
+  bedarfe: {},        // kindId -> { Montag: {...}, ... } - aktuell aktive Bedarfe (akut/temporär)
+  tage: DEFAULT_DAYS.map(d => ({ name: d, von: '07:15', bis: '16:00' })),
+  maxKinderProTag: 20,
+  plan: {},           // kindId -> { Montag: {von, bis} | null, ... }
+  standardplaene: [], // [{id, name, beschreibung, bedarfe, plan, tage, maxKinderProTag, createdAt}]
+  history: [],        // [{id, ts, label, plan, snapshotKumul}]
+  meta: { lastEdit: null, version: 2 }
+};
+
+/* ---------- IDs ---------- */
+function uid() { return 'k' + Math.random().toString(36).slice(2, 9); }
+
+/* ---------- Toast ---------- */
+function toast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { t.className = 'toast ' + type; }, 3000);
+}
+
+/* ---------- Time helpers ---------- */
+function timeToMin(t) {
+  if (!t) return null;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+function minToTime(m) {
+  const h = Math.floor(m / 60), mm = m % 60;
+  return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+}
+function durH(von, bis) {
+  if (!von || !bis) return 0;
+  const d = (timeToMin(bis) - timeToMin(von)) / 60;
+  return Math.max(0, d);
+}
+function intersectHours(a, b) {
+  // a, b = {von, bis}
+  if (!a || !b || !a.von || !a.bis || !b.von || !b.bis) return 0;
+  const av = timeToMin(a.von), ab = timeToMin(a.bis);
+  const bv = timeToMin(b.von), bb = timeToMin(b.bis);
+  const start = Math.max(av, bv), end = Math.min(ab, bb);
+  return Math.max(0, (end - start) / 60);
+}
+
+/* ---------- Tab navigation ---------- */
+document.querySelectorAll('nav.tabs button[data-tab]').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('nav.tabs button[data-tab]').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    document.getElementById('tab-' + b.dataset.tab).classList.add('active');
+    // refresh views
+    if (b.dataset.tab === 'planer') { renderPlanner(); renderStandardSelect(); }
+    if (b.dataset.tab === 'import') { renderBedarfeView(); renderStammStatus(); }
+    if (b.dataset.tab === 'standard') renderStandardList();
+    if (b.dataset.tab === 'historie') renderHistory();
+    if (b.dataset.tab === 'datei') renderMarkdownPreview();
+    if (b.dataset.tab === 'abfrage') renderMailPreview();
+  });
+});
+
+/* ===================================================================
+   TAB 1: KINDER
+   =================================================================== */
+function renderKinder() {
+  const tb = document.getElementById('kinderTbody');
+  tb.innerHTML = '';
+  state.kinder.forEach(k => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" value="${esc(k.name)}" data-f="name"></td>
+      <td><input type="text" value="${esc(k.gruppe)}" data-f="gruppe"></td>
+      <td><input type="number" step="0.5" min="0" max="50" value="${k.vertragH || 0}" data-f="vertragH" style="width: 80px"></td>
+      <td><input type="text" value="${esc(k.email)}" data-f="email"></td>
+      <td><input type="number" step="0.25" min="0" value="${k.kumulH || 0}" data-f="kumulH" style="width: 90px"></td>
+      <td><button class="btn danger" data-del="${k.id}">Entfernen</button></td>
+    `;
+    tr.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const f = inp.dataset.f;
+        let v = inp.value;
+        if (f === 'vertragH' || f === 'kumulH') v = parseFloat(v) || 0;
+        k[f] = v;
+        markEdit();
+      });
+    });
+    tr.querySelector('[data-del]').addEventListener('click', () => {
+      if (!confirm(`Kind „${k.name}" wirklich entfernen?\n\nDie zugehörigen Bedarfe (aktuell und Stamm) und Plan-Einträge gehen verloren. Einträge in Standardplänen und Historie bleiben erhalten, verweisen dann aber auf „unbekannt".`)) return;
+      state.kinder = state.kinder.filter(x => x.id !== k.id);
+      delete state.bedarfe[k.id];
+      delete state.bedarfeStamm[k.id];
+      delete state.plan[k.id];
+      markEdit();
+      renderKinder();
+    });
+    tb.appendChild(tr);
+  });
+  document.getElementById('kinderCount').textContent = `${state.kinder.length} Kinder`;
+}
+
+function esc(s) {
+  return String(s || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+}
+
+document.getElementById('btnAddKind').addEventListener('click', () => {
+  state.kinder.push({ id: uid(), name: '', gruppe: '', vertragH: 35, email: '', kumulH: 0 });
+  markEdit();
+  renderKinder();
+});
+
+/* ===================================================================
+   TAB 2: ABFRAGE
+   =================================================================== */
+function buildMailTemplate() {
+  const a = state.abfrage;
+  const zeit = a.zeitraum || '[Zeitraum einfügen]';
+  const deadline = a.deadline ? new Date(a.deadline).toLocaleDateString('de-DE') : '[Datum]';
+  const absender = a.absender || '[Absender]';
+  const intro = a.einleitung || '';
+  const tagesZeilen = state.tage.map(t => {
+    return `${t.name}: von ____:____ bis ____:____   (oder: nein)`;
+  }).join('\n');
+
+  return `Betreff: Bedarfsabfrage Notbetreuung ${zeit}
+
+${intro}
+
+Zeitraum: ${zeit}
+Antwort bitte bis: ${deadline}
+
+============================================
+ANTWORTBLOCK – BITTE NICHT VERÄNDERN
+============================================
+[NOTBETREUUNG-ANTWORT v1]
+Kind: [Name des Kindes hier einfügen]
+Gruppe: [Gruppe]
+
+${tagesZeilen}
+
+Bemerkungen:
+____________________________________________
+[ENDE ANTWORT]
+============================================
+
+Vielen Dank.
+
+${absender}`;
+}
+
+function renderMailPreview() {
+  document.getElementById('mailPreview').textContent = buildMailTemplate();
+  // example block
+  const ex = `[NOTBETREUUNG-ANTWORT v1]
+Kind: Max Mustermann
+Gruppe: Bienen
+
+Montag: von 07:30 bis 14:00
+Dienstag: nein
+Mittwoch: von 08:00 bis 16:00
+Donnerstag: von 07:15 bis 12:00
+Freitag: nein
+
+Bemerkungen: keine
+[ENDE ANTWORT]`;
+  const elEx = document.getElementById('exampleBlock');
+  if (elEx) elEx.textContent = ex;
+}
+
+['abfrageZeitraum','abfrageDeadline','abfrageAbsender','abfrageEinleitung'].forEach(id => {
+  document.getElementById(id).addEventListener('input', e => {
+    const key = id.replace('abfrage','').replace(/^./, c => c.toLowerCase());
+    state.abfrage[key] = e.target.value;
+    markEdit();
+    renderMailPreview();
+  });
+});
+
+document.getElementById('btnCopyTemplate').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(buildMailTemplate());
+    toast('Vorlage in Zwischenablage kopiert.', 'ok');
+  } catch (e) {
+    toast('Kopieren fehlgeschlagen. Bitte aus Vorschau manuell kopieren.', 'err');
+  }
+});
+
+document.getElementById('btnGenMailto').addEventListener('click', () => {
+  const recipients = state.kinder.map(k => k.email).filter(e => e && e.includes('@'));
+  if (recipients.length === 0) { toast('Keine gültigen Eltern-E-Mails hinterlegt.', 'err'); return; }
+  const tpl = buildMailTemplate();
+  const subjMatch = tpl.match(/^Betreff:\s*(.+)$/m);
+  const subject = subjMatch ? subjMatch[1] : 'Bedarfsabfrage Notbetreuung';
+  const body = tpl.replace(/^Betreff:.+\n+/, '');
+  // bcc to protect privacy
+  const link = `mailto:?bcc=${encodeURIComponent(recipients.join(';'))}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  if (link.length > 20000) {
+    toast('Adressliste zu lang für einen Mailto-Link. Bitte „Einzeln" verwenden.', 'err');
+    return;
+  }
+  window.location.href = link;
+});
+
+document.getElementById('btnGenMailtoSingle').addEventListener('click', () => {
+  // open one mailto per kid (slow, but works for small numbers)
+  const valid = state.kinder.filter(k => k.email && k.email.includes('@'));
+  if (valid.length === 0) { toast('Keine Eltern-E-Mails hinterlegt.', 'err'); return; }
+  if (valid.length > 8 && !confirm(`Es werden ${valid.length} Mail-Fenster geöffnet. Fortfahren?`)) return;
+  const tpl = buildMailTemplate();
+  const subjMatch = tpl.match(/^Betreff:\s*(.+)$/m);
+  const subject = subjMatch ? subjMatch[1] : 'Bedarfsabfrage Notbetreuung';
+  const body = tpl.replace(/^Betreff:.+\n+/, '');
+  valid.forEach(k => {
+    // pre-fill kid name
+    const personalBody = body.replace('[Name des Kindes hier einfügen]', k.name).replace('[Gruppe]', k.gruppe);
+    const link = `mailto:${encodeURIComponent(k.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(personalBody)}`;
+    window.open(link, '_blank');
+  });
+});
+
+/* ===================================================================
+   TAB 3: IMPORT - .msg parser + answer block parser
+   =================================================================== */
+
+/* ---------- Minimal MS Compound File Binary parser ----------
+   We only need to extract the body text streams from a .msg file.
+   The relevant streams are named __substg1.0_1000XXXX where XXXX is the
+   PropertyID for PR_BODY (0x1000 unicode utf-16le, 0x1013 html, 0x1000 ascii)
+   Approach: walk the directory entries, locate matching ones, read their data.
+*/
+async function parseMsgFile(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  try {
+    const text = extractTextFromMsg(buf);
+    return text;
+  } catch (e) {
+    console.warn('msg parser failed for', file.name, e);
+    // fallback: aggressive scan for utf-16le text containing our marker
+    return scanForMarker(buf);
+  }
+}
+
+function readU16(b, o) { return b[o] | (b[o+1]<<8); }
+function readU32(b, o) { return (b[o] | (b[o+1]<<8) | (b[o+2]<<16) | (b[o+3]<<24)) >>> 0; }
+function readU64(b, o) {
+  // Returns Number, assumes < 2^53
+  const lo = readU32(b,o), hi = readU32(b,o+4);
+  return hi * 0x100000000 + lo;
+}
+
+function extractTextFromMsg(buf) {
+  // CFB header
+  const sig = [0xD0,0xCF,0x11,0xE0,0xA1,0xB1,0x1A,0xE1];
+  for (let i=0;i<8;i++) if (buf[i]!==sig[i]) throw new Error('not CFB');
+  const sectorShift = readU16(buf, 30);          // typically 9 -> 512
+  const miniSectorShift = readU16(buf, 32);      // typically 6 -> 64
+  const numDirSectors = readU32(buf, 40);
+  const numFatSectors = readU32(buf, 44);
+  const firstDirSector = readU32(buf, 48);
+  const miniStreamCutoff = readU32(buf, 56);
+  const firstMiniFatSector = readU32(buf, 60);
+  const numMiniFatSectors = readU32(buf, 64);
+  const firstDifatSector = readU32(buf, 68);
+  const numDifatSectors = readU32(buf, 72);
+
+  const sectorSize = 1 << sectorShift;
+  const miniSectorSize = 1 << miniSectorShift;
+
+  // DIFAT (first 109 entries in header at offset 76)
+  const difat = [];
+  for (let i=0;i<109;i++) {
+    const v = readU32(buf, 76 + i*4);
+    if (v === 0xFFFFFFFF) break;
+    difat.push(v);
+  }
+  // Extended DIFAT
+  let cur = firstDifatSector;
+  while (cur !== 0xFFFFFFFF && cur !== 0xFFFFFFFE && difat.length < 100000) {
+    const off = (cur+1) * sectorSize;
+    const numEntries = (sectorSize/4) - 1;
+    for (let i=0;i<numEntries;i++) {
+      const v = readU32(buf, off + i*4);
+      if (v === 0xFFFFFFFF) continue;
+      difat.push(v);
+    }
+    cur = readU32(buf, off + numEntries*4);
+  }
+
+  // Build FAT
+  const fat = new Uint32Array(difat.length * (sectorSize/4));
+  for (let i=0;i<difat.length;i++) {
+    const sec = difat[i];
+    if (sec === 0xFFFFFFFF) continue;
+    const off = (sec+1) * sectorSize;
+    for (let j=0;j<sectorSize/4;j++) {
+      fat[i*(sectorSize/4) + j] = readU32(buf, off + j*4);
+    }
+  }
+
+  // Read sector chain
+  function readChain(startSec, byteLen) {
+    const out = [];
+    let s = startSec;
+    let read = 0;
+    const limit = byteLen || Infinity;
+    while (s !== 0xFFFFFFFE && s !== 0xFFFFFFFF && read < limit && s < fat.length) {
+      const off = (s+1) * sectorSize;
+      const take = Math.min(sectorSize, limit - read);
+      out.push(buf.subarray(off, off+take));
+      read += take;
+      s = fat[s];
+      if (out.length > 100000) break;
+    }
+    return concatBytes(out);
+  }
+
+  // Mini FAT
+  const miniFatBytes = numMiniFatSectors > 0 ? readChain(firstMiniFatSector) : new Uint8Array(0);
+  const miniFat = new Uint32Array(miniFatBytes.length / 4);
+  for (let i=0;i<miniFat.length;i++) miniFat[i] = readU32(miniFatBytes, i*4);
+
+  // Directory
+  const dirBytes = readChain(firstDirSector);
+  const entries = [];
+  const ENTRY_SIZE = 128;
+  for (let i=0;i*ENTRY_SIZE < dirBytes.length;i++) {
+    const off = i*ENTRY_SIZE;
+    const nameLen = readU16(dirBytes, off+64);
+    let name = '';
+    for (let j=0;j<nameLen && j<64;j+=2) {
+      const c = readU16(dirBytes, off+j);
+      if (c === 0) break;
+      name += String.fromCharCode(c);
+    }
+    const type = dirBytes[off+66];
+    if (type === 0) continue;
+    entries.push({
+      name,
+      type,
+      startSector: readU32(dirBytes, off+116),
+      size: readU64(dirBytes, off+120),
+      idx: i
+    });
+  }
+
+  // Mini stream container = stream of root entry (entries[0])
+  let miniStream = new Uint8Array(0);
+  if (entries[0]) {
+    miniStream = readChain(entries[0].startSector, entries[0].size);
+  }
+
+  function readEntry(e) {
+    if (e.size < miniStreamCutoff) {
+      // Mini stream
+      const out = [];
+      let s = e.startSector;
+      let read = 0;
+      while (s !== 0xFFFFFFFE && s !== 0xFFFFFFFF && read < e.size && s < miniFat.length) {
+        const off = s * miniSectorSize;
+        const take = Math.min(miniSectorSize, e.size - read);
+        out.push(miniStream.subarray(off, off+take));
+        read += take;
+        s = miniFat[s];
+        if (out.length > 100000) break;
+      }
+      return concatBytes(out);
+    } else {
+      return readChain(e.startSector, e.size);
+    }
+  }
+
+  // Candidate property streams for body text
+  // PR_BODY = 0x1000 (PT_UNICODE 0x001F or PT_STRING8 0x001E)
+  // PR_BODY_HTML = 0x1013 (PT_BINARY or PT_STRING)
+  // The stream name is __substg1.0_<TAG><TYPE> as 8 hex digits.
+  const candidates = [];
+  for (const e of entries) {
+    if (!e.name.startsWith('__substg1.0_')) continue;
+    const tag = e.name.slice(12, 16);  // 4 hex of property id
+    const typ = e.name.slice(16, 20);  // 4 hex of type
+    candidates.push({ entry: e, tag: tag.toUpperCase(), typ: typ.toUpperCase() });
+  }
+
+  // Prefer plain body (1000) unicode (001F), then ascii (001E), then html (1013)
+  function decode(bytes, isUnicode) {
+    if (isUnicode) {
+      let s = '';
+      for (let i=0;i+1<bytes.length;i+=2) {
+        s += String.fromCharCode(bytes[i] | (bytes[i+1]<<8));
+      }
+      // strip trailing nulls
+      return s.replace(/\u0000+$/,'');
+    } else {
+      // assume latin-1 / windows-1252-ish
+      let s = '';
+      for (let i=0;i<bytes.length;i++) {
+        const c = bytes[i];
+        if (c === 0) break;
+        s += String.fromCharCode(c);
+      }
+      return s;
+    }
+  }
+
+  const want = [
+    {tag:'1000', typ:'001F', uni:true},
+    {tag:'1000', typ:'001E', uni:false},
+    {tag:'1013', typ:'001F', uni:true},
+    {tag:'1013', typ:'001E', uni:false},
+    {tag:'1013', typ:'0102', uni:false}, // binary html
+  ];
+  for (const w of want) {
+    const c = candidates.find(c => c.tag === w.tag && c.typ === w.typ);
+    if (c) {
+      const bytes = readEntry(c.entry);
+      let text = decode(bytes, w.uni);
+      if (w.tag === '1013') text = stripHtml(text);
+      if (text && text.includes('[NOTBETREUUNG-ANTWORT')) return text;
+      // keep first text as fallback
+      if (text && !want._fb) want._fb = text;
+    }
+  }
+  return want._fb || '';
+}
+
+function concatBytes(arr) {
+  let n = 0;
+  for (const a of arr) n += a.length;
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const a of arr) { out.set(a, o); o += a.length; }
+  return out;
+}
+
+function stripHtml(html) {
+  // Remove tags, decode &nbsp;, &amp;, &lt;, &gt;
+  return html.replace(/<style[\s\S]*?<\/style>/gi,'')
+             .replace(/<script[\s\S]*?<\/script>/gi,'')
+             .replace(/<br\s*\/?>/gi,'\n')
+             .replace(/<\/p>/gi,'\n')
+             .replace(/<[^>]+>/g,'')
+             .replace(/&nbsp;/g,' ')
+             .replace(/&amp;/g,'&')
+             .replace(/&lt;/g,'<')
+             .replace(/&gt;/g,'>')
+             .replace(/&quot;/g,'"')
+             .replace(/&#39;/g,"'");
+}
+
+function scanForMarker(buf) {
+  // Try UTF-16LE first
+  const marker = '[NOTBETREUUNG-ANTWORT';
+  // build utf16le bytes
+  const m16 = new Uint8Array(marker.length * 2);
+  for (let i=0;i<marker.length;i++) { m16[i*2] = marker.charCodeAt(i); m16[i*2+1] = 0; }
+  const idx = indexOf(buf, m16);
+  if (idx >= 0) {
+    // read until [ENDE ANTWORT]
+    const endMarker = '[ENDE ANTWORT]';
+    const e16 = new Uint8Array(endMarker.length * 2);
+    for (let i=0;i<endMarker.length;i++) { e16[i*2] = endMarker.charCodeAt(i); e16[i*2+1] = 0; }
+    const end = indexOf(buf, e16, idx);
+    const stop = end >= 0 ? end + e16.length : Math.min(buf.length, idx + 4000);
+    let s = '';
+    for (let i=idx;i+1<stop;i+=2) s += String.fromCharCode(buf[i] | (buf[i+1]<<8));
+    return s;
+  }
+  // ASCII
+  const mA = new TextEncoder().encode(marker);
+  const idx2 = indexOf(buf, mA);
+  if (idx2 >= 0) {
+    const eA = new TextEncoder().encode('[ENDE ANTWORT]');
+    const end = indexOf(buf, eA, idx2);
+    const stop = end >= 0 ? end + eA.length : Math.min(buf.length, idx2 + 4000);
+    return new TextDecoder('latin1').decode(buf.subarray(idx2, stop));
+  }
+  return '';
+}
+
+function indexOf(haystack, needle, from=0) {
+  outer: for (let i=from;i<=haystack.length-needle.length;i++) {
+    for (let j=0;j<needle.length;j++) {
+      if (haystack[i+j] !== needle[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+}
+
+/* ---------- Answer block parser ---------- */
+function parseAnswerBlock(text) {
+  // find [NOTBETREUUNG-ANTWORT ... [ENDE ANTWORT]
+  const startIdx = text.indexOf('[NOTBETREUUNG-ANTWORT');
+  if (startIdx < 0) return null;
+  const endIdx = text.indexOf('[ENDE ANTWORT]', startIdx);
+  if (endIdx < 0) return null;
+  const block = text.slice(startIdx, endIdx);
+  const lines = block.split(/\r?\n/);
+  const result = { name: '', gruppe: '', tage: {}, bemerkungen: '' };
+  let inBemerk = false;
+  let bemerkLines = [];
+  for (const ln of lines) {
+    const line = ln.trim();
+    if (/^Kind\s*:/i.test(line)) {
+      result.name = line.replace(/^Kind\s*:\s*/i, '').replace(/\[.*?\]/g,'').trim();
+      continue;
+    }
+    if (/^Gruppe\s*:/i.test(line)) {
+      result.gruppe = line.replace(/^Gruppe\s*:\s*/i, '').replace(/\[.*?\]/g,'').trim();
+      continue;
+    }
+    if (/^Bemerkungen?\s*:/i.test(line)) {
+      inBemerk = true;
+      bemerkLines.push(line.replace(/^Bemerkungen?\s*:\s*/i,''));
+      continue;
+    }
+    // day line: "Montag: von 07:30 bis 14:00" or "Dienstag: nein"
+    const dayMatch = line.match(/^(Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)\s*:\s*(.*)$/i);
+    if (dayMatch) {
+      inBemerk = false;
+      const day = dayMatch[1].charAt(0).toUpperCase() + dayMatch[1].slice(1).toLowerCase();
+      const rest = dayMatch[2].trim();
+      if (/^(nein|kein|keine|--+|—)/i.test(rest) || rest === '' || /von\s*_+\s*:\s*_+/i.test(rest)) {
+        result.tage[day] = { none: true };
+      } else {
+        const tm = rest.match(/von\s*(\d{1,2})[:\.](\d{2})\s*bis\s*(\d{1,2})[:\.](\d{2})/i);
+        if (tm) {
+          result.tage[day] = {
+            von: `${String(+tm[1]).padStart(2,'0')}:${tm[2]}`,
+            bis: `${String(+tm[3]).padStart(2,'0')}:${tm[4]}`
+          };
+        } else {
+          // Try plain "07:30 - 14:00"
+          const tm2 = rest.match(/(\d{1,2})[:\.](\d{2})\s*[-–]\s*(\d{1,2})[:\.](\d{2})/);
+          if (tm2) {
+            result.tage[day] = {
+              von: `${String(+tm2[1]).padStart(2,'0')}:${tm2[2]}`,
+              bis: `${String(+tm2[3]).padStart(2,'0')}:${tm2[4]}`
+            };
+          } else {
+            result.tage[day] = { raw: rest };
+          }
+        }
+      }
+      continue;
+    }
+    if (inBemerk) bemerkLines.push(line);
+  }
+  result.bemerkungen = bemerkLines.join(' ').trim();
+  return result;
+}
+
+function findKindByAnswer(ans) {
+  // match by name (case-insensitive, ignoring extra spaces)
+  if (!ans.name) return null;
+  const norm = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  let candidate = state.kinder.find(k => norm(k.name) === norm(ans.name));
+  if (candidate) return candidate;
+  // partial match: all words of ans.name must be in kid.name
+  const aw = norm(ans.name).split(' ');
+  candidate = state.kinder.find(k => {
+    const kw = norm(k.name).split(' ');
+    return aw.every(w => kw.includes(w));
+  });
+  if (candidate) return candidate;
+  // last fallback: substring
+  return state.kinder.find(k => norm(k.name).includes(norm(ans.name)) || norm(ans.name).includes(norm(k.name)));
+}
+
+/* ---------- Import UI ---------- */
+document.getElementById('btnPickMsg').addEventListener('click', () => {
+  document.getElementById('msgFiles').click();
+});
+
+document.getElementById('msgFiles').addEventListener('change', async e => {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+  document.getElementById('importStatus').textContent = `Verarbeite ${files.length} Datei(en)…`;
+  const results = [];
+  for (const file of files) {
+    let text = '';
+    if (file.name.toLowerCase().endsWith('.msg')) {
+      text = await parseMsgFile(file);
+    } else {
+      text = await file.text();
+    }
+    const ans = parseAnswerBlock(text);
+    results.push({ file: file.name, ans, raw: text.length });
+  }
+  applyImportResults(results);
+  e.target.value = '';
+});
+
+function applyImportResults(results) {
+  const container = document.getElementById('importResults');
+  let ok = 0, fail = 0, ambig = 0;
+  const out = [];
+  for (const r of results) {
+    if (!r.ans) {
+      out.push(`<div class="history-entry" style="border-color: var(--bad)"><strong>${esc(r.file)}</strong><div class="hist-meta">Kein gültiger Antwortblock gefunden.</div></div>`);
+      fail++;
+      continue;
+    }
+    const kind = findKindByAnswer(r.ans);
+    if (!kind) {
+      out.push(`
+        <div class="history-entry" style="border-color: var(--warn)">
+          <strong>${esc(r.file)}</strong>
+          <div class="hist-meta">Antwort von „${esc(r.ans.name)}" – kein passendes Kind gefunden.</div>
+          <div class="hist-actions">
+            <select id="assign_${r.ans.name.replace(/\W/g,'_')}_${Math.random().toString(36).slice(2,5)}">
+              <option value="">— neues Kind anlegen —</option>
+              ${state.kinder.map(k => `<option value="${k.id}">${esc(k.name)} (${esc(k.gruppe)})</option>`).join('')}
+            </select>
+            <button class="btn ghost btn-assign">Zuordnen</button>
+          </div>
+        </div>
+      `);
+      ambig++;
+      // attach handler after insertion
+      setTimeout(() => {
+        const lastEntry = container.querySelectorAll('.history-entry')[container.querySelectorAll('.history-entry').length-1];
+        const sel = lastEntry.querySelector('select');
+        const btn = lastEntry.querySelector('.btn-assign');
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+          let k;
+          if (sel.value) k = state.kinder.find(x => x.id === sel.value);
+          else {
+            k = { id: uid(), name: r.ans.name, gruppe: r.ans.gruppe, vertragH: 35, email: '', kumulH: 0 };
+            state.kinder.push(k);
+          }
+          state.bedarfe[k.id] = answerToBedarf(r.ans);
+          markEdit();
+          renderKinder();
+          renderBedarfeView();
+          toast(`Zuordnung gespeichert.`, 'ok');
+          lastEntry.style.opacity = '0.5';
+        });
+      }, 50);
+      continue;
+    }
+    state.bedarfe[kind.id] = answerToBedarf(r.ans);
+    ok++;
+    out.push(`
+      <div class="history-entry" style="border-color: var(--good)">
+        <strong>${esc(r.file)}</strong> → ${esc(kind.name)}
+        <div class="hist-meta">${summarizeBedarf(state.bedarfe[kind.id])}</div>
+      </div>
+    `);
+  }
+  container.innerHTML = out.join('') || '<div class="empty-state">Keine Ergebnisse.</div>';
+  document.getElementById('importStatus').textContent =
+    `${ok} erfolgreich · ${ambig} mehrdeutig · ${fail} fehlgeschlagen`;
+  markEdit();
+  renderBedarfeView();
+}
+
+function answerToBedarf(ans) {
+  const b = {};
+  for (const t of state.tage) {
+    const a = ans.tage[t.name];
+    if (!a) b[t.name] = { none: true };
+    else if (a.none) b[t.name] = { none: true };
+    else if (a.von && a.bis) b[t.name] = { von: a.von, bis: a.bis };
+    else b[t.name] = { none: true };
+  }
+  return b;
+}
+
+function summarizeBedarf(b) {
+  if (!b) return '–';
+  const parts = state.tage.map(t => {
+    const e = b[t.name];
+    if (!e || e.none) return `${t.name.slice(0,2)}: ✕`;
+    return `${t.name.slice(0,2)}: ${e.von}–${e.bis}`;
+  });
+  return parts.join('  ·  ');
+}
+
+function renderBedarfeView() {
+  const c = document.getElementById('bedarfeView');
+  if (state.kinder.length === 0) {
+    c.innerHTML = '<div class="empty-state">Noch keine Kinder erfasst.</div>';
+    return;
+  }
+  let html = `<table class="data"><thead><tr>
+    <th>Kind</th>${state.tage.map(t => `<th>${esc(t.name.slice(0,2))}</th>`).join('')}<th>Σ Bedarf</th>
+  </tr></thead><tbody>`;
+  for (const k of state.kinder) {
+    const b = state.bedarfe[k.id] || {};
+    let sum = 0;
+    let cells = '';
+    for (const t of state.tage) {
+      const e = b[t.name];
+      let display = '';
+      if (!e || e.none) {
+        display = `<input type="text" value="" data-k="${k.id}" data-t="${t.name}" placeholder="—" style="width: 100px; font-family: var(--mono); font-size: 11px; color: var(--ink-mute);">`;
+      }
+      else if (e.von && e.bis) {
+        display = `<input type="text" value="${e.von}–${e.bis}" data-k="${k.id}" data-t="${t.name}" style="width: 100px; font-family: var(--mono); font-size: 11px;">`;
+        sum += durH(e.von, e.bis);
+      } else {
+        display = `<input type="text" value="${esc(e.raw || '')}" data-k="${k.id}" data-t="${t.name}" placeholder="07:15-16:00 / —" style="width: 100px; font-family: var(--mono); font-size: 11px;">`;
+      }
+      cells += `<td>${display}</td>`;
+    }
+    html += `<tr>
+      <td><strong>${esc(k.name)}</strong> <span style="color:var(--ink-mute); font-size: 11px;">${esc(k.gruppe)}</span></td>
+      ${cells}
+      <td style="font-family: var(--mono); font-size: 11px;">${sum.toFixed(2)}h</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  c.innerHTML = html;
+  c.querySelectorAll('input[data-k][data-t]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const k = inp.dataset.k, t = inp.dataset.t;
+      const v = inp.value.trim();
+      if (!state.bedarfe[k]) state.bedarfe[k] = {};
+      if (v === '' || /^(—|-+|nein|kein.*)$/i.test(v)) {
+        state.bedarfe[k][t] = { none: true };
+      } else {
+        const m = v.match(/(\d{1,2})[:\.](\d{2})\s*[-–]\s*(\d{1,2})[:\.](\d{2})/);
+        if (m) {
+          state.bedarfe[k][t] = {
+            von: `${String(+m[1]).padStart(2,'0')}:${m[2]}`,
+            bis: `${String(+m[3]).padStart(2,'0')}:${m[4]}`
+          };
+        } else {
+          state.bedarfe[k][t] = { raw: v };
+          toast('Format nicht erkannt. Erwartet z.B. 07:15-16:00', 'err');
+          return;
+        }
+      }
+      markEdit();
+      renderBedarfeView();
+    });
+  });
+}
+
+/* ---------- Paste text import ---------- */
+document.getElementById('btnPasteText').addEventListener('click', () => {
+  document.getElementById('pasteArea').value = '';
+  document.getElementById('modalPaste').classList.add('show');
+});
+document.getElementById('btnPasteCancel').addEventListener('click', () => {
+  document.getElementById('modalPaste').classList.remove('show');
+});
+document.getElementById('btnPasteImport').addEventListener('click', () => {
+  const txt = document.getElementById('pasteArea').value;
+  const blocks = txt.split(/^---+$/m);
+  const results = [];
+  blocks.forEach((b, i) => {
+    const ans = parseAnswerBlock(b);
+    results.push({ file: `Einfügung ${i+1}`, ans, raw: b.length });
+  });
+  applyImportResults(results);
+  document.getElementById('modalPaste').classList.remove('show');
+});
+
+/* ===================================================================
+   TAB 4: PLANER
+   =================================================================== */
+
+function renderTageConfig() {
+  const c = document.getElementById('tageConfig');
+  let html = '<table class="data"><thead><tr><th>Tag</th><th>Öffnungszeit von</th><th>bis</th><th>Stunden</th></tr></thead><tbody>';
+  state.tage.forEach((t,i) => {
+    html += `<tr>
+      <td><strong>${esc(t.name)}</strong></td>
+      <td><input type="time" value="${t.von}" data-ti="${i}" data-f="von"></td>
+      <td><input type="time" value="${t.bis}" data-ti="${i}" data-f="bis"></td>
+      <td style="font-family: var(--mono);">${durH(t.von, t.bis).toFixed(2)}h</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  c.innerHTML = html;
+  c.querySelectorAll('input[data-ti]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const i = +inp.dataset.ti, f = inp.dataset.f;
+      state.tage[i][f] = inp.value;
+      markEdit();
+      renderTageConfig();
+      renderPlanner();
+    });
+  });
+}
+
+function renderPlanner() {
+  const grid = document.getElementById('plannerGrid');
+  const cols = 1 + state.tage.length;
+  grid.style.gridTemplateColumns = `220px repeat(${state.tage.length}, 1fr)`;
+
+  const totalKumulOffset = computeTotalKumulOffset();
+
+  let html = '<div class="pcell header">Kind</div>';
+  for (const t of state.tage) {
+    html += `<div class="pcell header">${esc(t.name)}<br><span style="font-weight: 400; font-size: 10px; font-family: var(--mono);">${t.von}–${t.bis}</span></div>`;
+  }
+
+  // sort kids by name
+  const kids = [...state.kinder].sort((a,b) => a.name.localeCompare(b.name));
+
+  for (const k of kids) {
+    // compute coverage + kumul
+    const stats = computeStatsForKid(k);
+    const covColor = stats.cov >= 0.85 ? '' : (stats.cov >= 0.5 ? 'warn' : 'bad');
+    const kumulPct = (k.vertragH > 0) ? (stats.totalKumul / k.vertragH * 100) : 0;
+    html += `<div class="pcell namecell">
+      <div class="kid-name">${esc(k.name)}</div>
+      <div class="kid-grp">${esc(k.gruppe)} · Vertrag ${k.vertragH}h</div>
+      <div class="kid-stats">
+        <div class="cov-label">Bedarfsdeckung: ${(stats.cov*100).toFixed(0)}% (${stats.allocHours.toFixed(1)}/${stats.needHours.toFixed(1)}h)</div>
+        <div class="cov-bar ${covColor}"><div style="width: ${Math.min(100,stats.cov*100)}%"></div></div>
+        <div class="cov-label" style="margin-top: 6px;">Notbetr. kumul.: ${kumulPct.toFixed(1)}% vom Vertrag (${stats.totalKumul.toFixed(1)}h)</div>
+      </div>
+    </div>`;
+
+    for (const t of state.tage) {
+      const need = (state.bedarfe[k.id] || {})[t.name];
+      const alloc = (state.plan[k.id] || {})[t.name];
+      const hasNeed = need && !need.none && need.von && need.bis;
+      const hasAlloc = alloc && alloc.von && alloc.bis;
+      let cls = 'slot';
+      let inner = '';
+      if (hasNeed && hasAlloc) cls += ' has-need has-alloc';
+      else if (hasNeed) cls += ' has-need';
+      else if (hasAlloc) cls += ' no-need has-alloc';
+      else cls += ' empty';
+
+      if (hasAlloc) {
+        const needInfo = hasNeed
+          ? `<div class="need-info">Bedarf: ${need.von}–${need.bis}</div>`
+          : (need && need.none ? `<div class="need-info">— kein Bedarf gemeldet</div>` : '');
+        inner = `
+          <div class="x" data-act="del" data-k="${k.id}" data-t="${t.name}">✕</div>
+          <div class="times">${alloc.von}–${alloc.bis}</div>
+          <div class="badge">${durH(alloc.von,alloc.bis).toFixed(2)}h</div>
+          ${needInfo}`;
+      } else if (hasNeed) {
+        inner = `<div class="times" style="color: var(--warn);">Bedarf</div><div class="badge">${need.von}–${need.bis}</div>`;
+      } else {
+        inner = '+ zuweisen';
+      }
+      html += `<div class="pcell" style="padding: 4px;"><div class="${cls}"
+          draggable="${hasAlloc ? 'true' : 'false'}"
+          data-k="${k.id}" data-t="${t.name}"
+          data-has-alloc="${hasAlloc}"
+        >${inner}</div></div>`;
+    }
+  }
+
+  // Footer row: total kids per day & total hours
+  html += '<div class="pcell summary"><strong>Σ Kinder / Stunden pro Tag</strong></div>';
+  for (const t of state.tage) {
+    let count = 0, sumH = 0;
+    for (const k of state.kinder) {
+      const a = (state.plan[k.id] || {})[t.name];
+      if (a && a.von && a.bis) { count++; sumH += durH(a.von, a.bis); }
+    }
+    const over = count > state.maxKinderProTag;
+    html += `<div class="pcell summary ${over ? 'over' : ''}">${count} / ${state.maxKinderProTag}<br>${sumH.toFixed(1)}h gesamt</div>`;
+  }
+
+  grid.innerHTML = html;
+
+  // Attach DnD + click handlers
+  grid.querySelectorAll('.slot').forEach(sl => {
+    sl.addEventListener('dragstart', onDragStart);
+    sl.addEventListener('dragend', onDragEnd);
+    sl.addEventListener('dragover', onDragOver);
+    sl.addEventListener('dragleave', onDragLeave);
+    sl.addEventListener('drop', onDrop);
+    sl.addEventListener('click', e => {
+      // Don't fire if x or drag
+      if (e.target.dataset.act === 'del') return;
+      const k = sl.dataset.k, t = sl.dataset.t;
+      const isAlloc = sl.dataset.hasAlloc === 'true';
+      openSlotModal(k, t, isAlloc);
+    });
+  });
+  grid.querySelectorAll('[data-act="del"]').forEach(x => {
+    x.addEventListener('click', e => {
+      e.stopPropagation();
+      const k = x.dataset.k, t = x.dataset.t;
+      if (state.plan[k]) state.plan[k][t] = null;
+      markEdit();
+      renderPlanner();
+    });
+  });
+}
+
+function computeStatsForKid(k) {
+  const need = state.bedarfe[k.id] || {};
+  const alloc = state.plan[k.id] || {};
+  let needH = 0, coveredH = 0, allocH = 0;
+  for (const t of state.tage) {
+    const n = need[t.name];
+    const a = alloc[t.name];
+    if (n && !n.none && n.von && n.bis) {
+      const nH = durH(n.von, n.bis);
+      needH += nH;
+      if (a && a.von && a.bis) {
+        coveredH += intersectHours(n, a);
+      }
+    }
+    if (a && a.von && a.bis) allocH += durH(a.von, a.bis);
+  }
+  const cov = needH > 0 ? coveredH / needH : (allocH > 0 ? 1 : 1);
+  // total kumul = past kumul + currently-allocated hours (current plan not yet accepted)
+  // We do NOT add current plan to kumul; only on accept. But show projected:
+  const totalKumul = (k.kumulH || 0); // only accepted history
+  return { needH, allocH, coveredH, cov, needHours: needH, allocHours: allocH, totalKumul };
+}
+
+function computeTotalKumulOffset() {
+  // for fairness: average pct of vertrag used historically across kids
+  const arr = state.kinder.filter(k => k.vertragH > 0).map(k => (k.kumulH || 0) / k.vertragH);
+  return arr.length ? arr.reduce((a,b)=>a+b,0) / arr.length : 0;
+}
+
+document.getElementById('maxKinderProTag').addEventListener('input', e => {
+  state.maxKinderProTag = parseInt(e.target.value) || 1;
+  markEdit();
+  renderPlanner();
+});
+
+document.getElementById('btnClearPlan').addEventListener('click', () => {
+  if (!confirm('Aktuellen Plan wirklich leeren?')) return;
+  state.plan = {};
+  markEdit();
+  renderPlanner();
+});
+
+document.getElementById('btnAcceptPlan').addEventListener('click', () => {
+  // Compute hours per kid in current plan
+  const planSnapshot = JSON.parse(JSON.stringify(state.plan));
+  const snapshotKumul = {};
+  for (const k of state.kinder) {
+    let h = 0;
+    for (const t of state.tage) {
+      const a = (state.plan[k.id] || {})[t.name];
+      if (a && a.von && a.bis) h += durH(a.von, a.bis);
+    }
+    snapshotKumul[k.id] = h;
+  }
+  const label = prompt('Bezeichnung für diesen Plan (z.B. KW 23):', state.abfrage.zeitraum || new Date().toISOString().slice(0,10));
+  if (label === null) return;
+  // Add hours to each kid's kumulH
+  for (const k of state.kinder) {
+    k.kumulH = (k.kumulH || 0) + (snapshotKumul[k.id] || 0);
+  }
+  state.history.push({
+    id: 'h' + Date.now(),
+    ts: new Date().toISOString(),
+    label,
+    plan: planSnapshot,
+    snapshotKumul,
+    tage: JSON.parse(JSON.stringify(state.tage)),
+    bedarfe: JSON.parse(JSON.stringify(state.bedarfe))
+  });
+  markEdit();
+  toast(`Plan „${label}" in Historie gespeichert. Stunden wurden zur kumulativen Notbetreuung addiert.`, 'ok');
+  renderPlanner();
+  renderKinder();
+});
+
+/* ---------- Drag and drop ---------- */
+let dragSrc = null;
+function onDragStart(e) {
+  const sl = e.currentTarget;
+  if (sl.dataset.hasAlloc !== 'true') { e.preventDefault(); return; }
+  dragSrc = { k: sl.dataset.k, t: sl.dataset.t };
+  sl.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', sl.dataset.k + '|' + sl.dataset.t);
+}
+function onDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+}
+function onDragOver(e) {
+  if (!dragSrc) return;
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+}
+function onDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+function onDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!dragSrc) return;
+  const dst = { k: e.currentTarget.dataset.k, t: e.currentTarget.dataset.t };
+  if (dst.k === dragSrc.k && dst.t === dragSrc.t) { dragSrc = null; return; }
+  const srcAlloc = (state.plan[dragSrc.k] || {})[dragSrc.t];
+  if (!srcAlloc) { dragSrc = null; return; }
+  const dstAlloc = (state.plan[dst.k] || {})[dst.t];
+  // swap or move
+  if (!state.plan[dst.k]) state.plan[dst.k] = {};
+  if (!state.plan[dragSrc.k]) state.plan[dragSrc.k] = {};
+  state.plan[dst.k][dst.t] = srcAlloc;
+  state.plan[dragSrc.k][dragSrc.t] = dstAlloc || null;
+  dragSrc = null;
+  markEdit();
+  renderPlanner();
+}
+
+/* ---------- Slot modal ---------- */
+let modalCtx = null;
+function openSlotModal(kindId, tag, isEdit) {
+  const k = state.kinder.find(x => x.id === kindId);
+  const need = (state.bedarfe[kindId] || {})[tag];
+  const alloc = (state.plan[kindId] || {})[tag];
+  const tCfg = state.tage.find(t => t.name === tag);
+  modalCtx = { kindId, tag };
+  const info = `<strong>${esc(k.name)}</strong> · ${esc(tag)}<br>
+    Öffnungszeit: ${tCfg.von}–${tCfg.bis} (${durH(tCfg.von,tCfg.bis).toFixed(2)}h)<br>
+    Bedarf: ${need && !need.none ? `${need.von}–${need.bis}` : '—'}`;
+  document.getElementById('modalSlotInfo').innerHTML = info;
+  document.getElementById('slotVon').value = (alloc && alloc.von) || (need && need.von) || tCfg.von;
+  document.getElementById('slotBis').value = (alloc && alloc.bis) || (need && need.bis) || tCfg.bis;
+  document.getElementById('modalSlot').classList.add('show');
+}
+document.getElementById('btnSlotCancel').addEventListener('click', () => {
+  document.getElementById('modalSlot').classList.remove('show');
+});
+document.getElementById('btnSlotSave').addEventListener('click', () => {
+  if (!modalCtx) return;
+  const von = document.getElementById('slotVon').value;
+  const bis = document.getElementById('slotBis').value;
+  if (!von || !bis || timeToMin(von) >= timeToMin(bis)) {
+    toast('Ungültige Zeiten.', 'err');
+    return;
+  }
+  if (!state.plan[modalCtx.kindId]) state.plan[modalCtx.kindId] = {};
+  state.plan[modalCtx.kindId][modalCtx.tag] = { von, bis };
+  document.getElementById('modalSlot').classList.remove('show');
+  markEdit();
+  renderPlanner();
+});
+
+/* ===================================================================
+   AUTOPLAN ALGORITHM
+   Goal: equalize achieved-pct-of-vertrag across kids, considering
+         historical kumulH, while honoring needs.
+   Strategy:
+     - Iteratively assign slots, prioritizing kids with lowest projected
+       cumulative pct (kumulH + currently-planned hours) / vertragH
+     - For each day, fill up to maxKinderProTag with kids who have need
+     - For each chosen kid, allocate the intersection of their need with
+       the day opening hours, possibly clipped if there's reason to (no
+       partial truncation initially – we use full need intersection)
+   =================================================================== */
+document.getElementById('btnAutoplan').addEventListener('click', () => {
+  if (state.kinder.length === 0) { toast('Keine Kinder vorhanden.', 'err'); return; }
+  autoplan();
+  toast('Vorschlag generiert. Manuelle Anpassungen möglich.', 'ok');
+});
+
+function autoplan() {
+  // Reset plan
+  state.plan = {};
+
+  // Helper: candidate hours for kid k on day t
+  function candidateForKid(k, t) {
+    const need = (state.bedarfe[k.id] || {})[t.name];
+    if (!need || need.none || !need.von || !need.bis) return null;
+    const dayOpen = { von: t.von, bis: t.bis };
+    const ov = Math.max(timeToMin(need.von), timeToMin(t.von));
+    const ob = Math.min(timeToMin(need.bis), timeToMin(t.bis));
+    if (ob <= ov) return null;
+    return { von: minToTime(ov), bis: minToTime(ob), hours: (ob-ov)/60 };
+  }
+
+  // Projected cumulative hours per kid (history + currently planned in this autoplan)
+  const planned = {};
+  state.kinder.forEach(k => planned[k.id] = 0);
+
+  // For each day, decide who gets in. We want to roughly equalize coverage.
+  // Approach:
+  //   Phase 1: For each day, pick up to maxKinderProTag kids with greatest "need pressure",
+  //            where need pressure = need on this day exists AND kid has lowest projected pct.
+  //   Phase 2: Iterative refinement - if some kids end far above average pct, drop some of
+  //            their allocations to make room for kids with lower pct (only if any kid is unfilled).
+  //
+  // Simpler: greedy day-by-day with priority = projectedPct ascending.
+
+  for (const t of state.tage) {
+    // collect candidates
+    const cands = [];
+    for (const k of state.kinder) {
+      const c = candidateForKid(k, t);
+      if (c) cands.push({ k, c });
+    }
+    // sort by projected pct ascending (= those with least so far get priority)
+    cands.sort((a,b) => {
+      const pa = (a.k.kumulH + planned[a.k.id]) / Math.max(0.1, a.k.vertragH);
+      const pb = (b.k.kumulH + planned[b.k.id]) / Math.max(0.1, b.k.vertragH);
+      return pa - pb;
+    });
+    const pick = cands.slice(0, state.maxKinderProTag);
+    for (const p of pick) {
+      if (!state.plan[p.k.id]) state.plan[p.k.id] = {};
+      state.plan[p.k.id][t.name] = { von: p.c.von, bis: p.c.bis };
+      planned[p.k.id] += p.c.hours;
+    }
+  }
+
+  // Refinement pass: if some kids have very low coverage and others very high,
+  // try to clip the highest's slots to give room.
+  // (Since we don't oversubscribe by kid count per day above max, this rarely needed.)
+  // We skip aggressive rebalancing here to keep behavior predictable.
+
+  markEdit();
+  renderPlanner();
+}
+
+/* ===================================================================
+   TAB 5: HISTORIE
+   =================================================================== */
+function renderHistory() {
+  const c = document.getElementById('historyList');
+  if (state.history.length === 0) {
+    c.innerHTML = '<div class="empty-state">Noch keine Pläne in der Historie.</div>';
+    return;
+  }
+  let html = '';
+  for (const h of [...state.history].reverse()) {
+    const date = new Date(h.ts).toLocaleString('de-DE');
+    let totalH = 0;
+    for (const kid in h.snapshotKumul) totalH += h.snapshotKumul[kid];
+    html += `<div class="history-entry">
+      <strong>${esc(h.label)}</strong>
+      <div class="hist-meta">${date} · ${Object.values(h.snapshotKumul).filter(v=>v>0).length} Kinder · ${totalH.toFixed(1)}h gesamt</div>
+      <details style="margin-top: 8px;">
+        <summary style="cursor:pointer; font-size:12px; color: var(--ink-soft);">Details anzeigen</summary>
+        <table class="data" style="margin-top: 8px;">
+          <thead><tr><th>Kind</th>${h.tage.map(t => `<th>${esc(t.name.slice(0,2))}</th>`).join('')}<th>Σ</th></tr></thead>
+          <tbody>
+            ${Object.keys(h.plan).map(kid => {
+              const kobj = state.kinder.find(x => x.id === kid);
+              const name = kobj ? kobj.name : `(unbekannt: ${kid})`;
+              const cells = h.tage.map(t => {
+                const a = h.plan[kid][t.name];
+                return `<td>${a && a.von ? `${a.von}–${a.bis}` : '—'}</td>`;
+              }).join('');
+              return `<tr><td><strong>${esc(name)}</strong></td>${cells}<td>${(h.snapshotKumul[kid]||0).toFixed(2)}h</td></tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </details>
+      <div class="hist-actions">
+        <button class="btn ghost" data-rb="${h.id}">In aktuellen Plan laden</button>
+        <button class="btn danger" data-del-h="${h.id}">Entfernen &amp; Stunden abziehen</button>
+      </div>
+    </div>`;
+  }
+  c.innerHTML = html;
+  c.querySelectorAll('[data-rb]').forEach(b => {
+    b.addEventListener('click', () => {
+      const h = state.history.find(x => x.id === b.dataset.rb);
+      if (!h) return;
+      if (!confirm(`Plan „${h.label}" in den aktuellen Planer laden? Der aktuelle Plan wird überschrieben.`)) return;
+      state.plan = JSON.parse(JSON.stringify(h.plan));
+      // Note: we don't restore tage from history - keeps current open hours.
+      markEdit();
+      renderPlanner();
+      // switch to planner
+      document.querySelector('nav.tabs button[data-tab="planer"]').click();
+    });
+  });
+  c.querySelectorAll('[data-del-h]').forEach(b => {
+    b.addEventListener('click', () => {
+      const h = state.history.find(x => x.id === b.dataset['delH']);
+      if (!h) return;
+      if (!confirm(`Eintrag „${h.label}" entfernen und die zugehörigen Stunden von den kumulativen Werten abziehen?`)) return;
+      for (const kid in h.snapshotKumul) {
+        const k = state.kinder.find(x => x.id === kid);
+        if (k) k.kumulH = Math.max(0, (k.kumulH || 0) - h.snapshotKumul[kid]);
+      }
+      state.history = state.history.filter(x => x.id !== h.id);
+      markEdit();
+      renderHistory();
+      renderKinder();
+    });
+  });
+}
+
+/* ===================================================================
+   STAMM-BEDARFE & STANDARDPLAENE
+   =================================================================== */
+
+function renderStammStatus() {
+  const el = document.getElementById('stammStatus');
+  if (!el) return;
+  const cnt = Object.keys(state.bedarfeStamm).filter(k => {
+    const b = state.bedarfeStamm[k];
+    return b && Object.values(b).some(v => v && !v.none);
+  }).length;
+  if (cnt === 0) {
+    el.textContent = 'Keine Stamm-Bedarfe hinterlegt';
+    el.className = 'pill';
+  } else {
+    el.textContent = `Stamm-Bedarfe für ${cnt} Kind${cnt===1?'':'er'} hinterlegt`;
+    el.className = 'pill good';
+  }
+}
+
+document.getElementById('btnLoadStamm').addEventListener('click', () => {
+  const cnt = Object.keys(state.bedarfeStamm).length;
+  if (cnt === 0) { toast('Keine Stamm-Bedarfe vorhanden.', 'err'); return; }
+  const akutCnt = Object.keys(bedarfeAkutFilled()).length;
+  let mode = 'replace';
+  if (akutCnt > 0) {
+    const choice = confirm(
+      `Es sind bereits aktuelle Bedarfe für ${akutCnt} Kind(er) erfasst.\n\n` +
+      `OK = alle aktuellen Bedarfe durch Stamm ersetzen\n` +
+      `Abbrechen = nur leere Plätze mit Stamm füllen`
+    );
+    mode = choice ? 'replace' : 'fill';
+  }
+  for (const kid of state.kinder) {
+    const stamm = state.bedarfeStamm[kid.id];
+    if (!stamm) continue;
+    if (mode === 'replace' || !state.bedarfe[kid.id] || !Object.values(state.bedarfe[kid.id]).some(v => v && !v.none)) {
+      state.bedarfe[kid.id] = JSON.parse(JSON.stringify(stamm));
+    }
+  }
+  markEdit();
+  renderBedarfeView();
+  toast(`Stamm-Bedarfe geladen (${mode === 'replace' ? 'ersetzt' : 'leere Plätze gefüllt'}).`, 'ok');
+});
+
+// returns akut bedarfe restricted to ones that actually have content
+function bedarfeAkutFilled() {
+  const r = {};
+  for (const kid in state.bedarfe) {
+    const b = state.bedarfe[kid];
+    if (b && Object.values(b).some(v => v && !v.none)) r[kid] = b;
+  }
+  return r;
+}
+
+document.getElementById('btnSaveStamm').addEventListener('click', () => {
+  const filled = bedarfeAkutFilled();
+  const cnt = Object.keys(filled).length;
+  if (cnt === 0) { toast('Keine aktuellen Bedarfe vorhanden.', 'err'); return; }
+  const stammCnt = Object.keys(state.bedarfeStamm).filter(k => {
+    const b = state.bedarfeStamm[k];
+    return b && Object.values(b).some(v => v && !v.none);
+  }).length;
+  let msg = `Aktuelle Bedarfe (${cnt} Kind${cnt===1?'':'er'}) als Stamm-Bedarfe speichern?`;
+  if (stammCnt > 0) msg += `\n\nBestehende Stamm-Bedarfe (${stammCnt}) werden überschrieben, wo neue vorhanden sind. Stamm-Einträge ohne neue Daten bleiben erhalten.`;
+  if (!confirm(msg)) return;
+  for (const kid in state.bedarfe) {
+    const b = state.bedarfe[kid];
+    if (b && Object.values(b).some(v => v && !v.none)) {
+      state.bedarfeStamm[kid] = JSON.parse(JSON.stringify(b));
+    }
+  }
+  markEdit();
+  renderStammStatus();
+  toast(`Stamm-Bedarfe aktualisiert.`, 'ok');
+});
+
+document.getElementById('btnClearAkut').addEventListener('click', () => {
+  const cnt = Object.keys(bedarfeAkutFilled()).length;
+  if (cnt === 0) { toast('Tabelle ist bereits leer.', ''); return; }
+  if (!confirm(`Aktuelle Bedarfe wirklich leeren? Stamm-Bedarfe und Standardpläne bleiben erhalten.`)) return;
+  state.bedarfe = {};
+  markEdit();
+  renderBedarfeView();
+  toast('Aktuelle Bedarfe geleert.', 'ok');
+});
+
+/* ---------- Standardpläne ---------- */
+
+function renderStandardList() {
+  const c = document.getElementById('standardList');
+  document.getElementById('standardCount').textContent =
+    `${state.standardplaene.length} Standardplan${state.standardplaene.length===1?'':'pläne'}`;
+  if (state.standardplaene.length === 0) {
+    c.innerHTML = '<div class="empty-state">Noch keine Standardpläne. Erstellen Sie einen, indem Sie im Planer einen Plan vorbereiten und hier „Aktuellen Stand als Standardplan speichern" klicken.</div>';
+    return;
+  }
+  let html = '';
+  for (const sp of state.standardplaene) {
+    // Count assigned slots
+    let slotCnt = 0, kidCnt = 0;
+    for (const kid in sp.plan) {
+      let kAny = false;
+      for (const t in sp.plan[kid]) {
+        if (sp.plan[kid][t] && sp.plan[kid][t].von) { slotCnt++; kAny = true; }
+      }
+      if (kAny) kidCnt++;
+    }
+    const created = new Date(sp.createdAt).toLocaleDateString('de-DE');
+    html += `<div class="history-entry" data-sp="${sp.id}">
+      <strong>${esc(sp.name)}</strong>
+      <div class="hist-meta">Erstellt: ${created} · ${kidCnt} Kind${kidCnt===1?'':'er'} · ${slotCnt} Zeitslots · max. ${sp.maxKinderProTag||state.maxKinderProTag}/Tag</div>
+      ${sp.beschreibung ? `<div style="font-size: 12px; color: var(--ink-soft); margin-top: 6px; font-style: italic;">${esc(sp.beschreibung)}</div>` : ''}
+      <details style="margin-top: 8px;">
+        <summary style="cursor:pointer; font-size:12px; color: var(--ink-soft);">Details anzeigen</summary>
+        <table class="data" style="margin-top: 8px;">
+          <thead><tr><th>Kind</th>${sp.tage.map(t => `<th>${esc(t.name.slice(0,2))}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${Object.keys(sp.plan).map(kid => {
+              const kobj = state.kinder.find(x => x.id === kid);
+              const name = kobj ? kobj.name : `(unbekannt: ${kid})`;
+              let any = false;
+              const cells = sp.tage.map(t => {
+                const a = sp.plan[kid][t.name];
+                if (a && a.von) { any = true; return `<td>${a.von}–${a.bis}</td>`; }
+                return `<td style="color: var(--ink-mute);">—</td>`;
+              }).join('');
+              if (!any) return '';
+              return `<tr><td><strong>${esc(name)}</strong></td>${cells}</tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </details>
+      <div class="hist-actions">
+        <button class="btn accent" data-apply-sp="${sp.id}">In Planer laden</button>
+        <button class="btn ghost" data-edit-sp="${sp.id}">Umbenennen / Beschreiben</button>
+        <button class="btn ghost" data-rename-sp="${sp.id}" style="display:none"></button>
+        <button class="btn ghost" data-update-sp="${sp.id}" title="Mit aktuellem Plan/Bedarfen überschreiben">Mit aktuellem Stand aktualisieren</button>
+        <button class="btn danger" data-del-sp="${sp.id}">Löschen</button>
+      </div>
+    </div>`;
+  }
+  c.innerHTML = html;
+
+  c.querySelectorAll('[data-apply-sp]').forEach(b => {
+    b.addEventListener('click', () => applyStandard(b.dataset.applySp, true));
+  });
+  c.querySelectorAll('[data-edit-sp]').forEach(b => {
+    b.addEventListener('click', () => {
+      const sp = state.standardplaene.find(x => x.id === b.dataset.editSp);
+      if (!sp) return;
+      const newName = prompt('Neuer Name:', sp.name);
+      if (newName === null) return;
+      const newDesc = prompt('Beschreibung (optional):', sp.beschreibung || '');
+      if (newDesc === null) return;
+      sp.name = newName.trim() || sp.name;
+      sp.beschreibung = newDesc.trim();
+      markEdit();
+      renderStandardList();
+      renderStandardSelect();
+    });
+  });
+  c.querySelectorAll('[data-update-sp]').forEach(b => {
+    b.addEventListener('click', () => {
+      const sp = state.standardplaene.find(x => x.id === b.dataset.updateSp);
+      if (!sp) return;
+      if (!confirm(`Standardplan „${sp.name}" mit dem aktuellen Plan und Bedarfen überschreiben?`)) return;
+      sp.bedarfe = JSON.parse(JSON.stringify(state.bedarfe));
+      sp.plan = JSON.parse(JSON.stringify(state.plan));
+      sp.tage = JSON.parse(JSON.stringify(state.tage));
+      sp.maxKinderProTag = state.maxKinderProTag;
+      sp.updatedAt = new Date().toISOString();
+      markEdit();
+      renderStandardList();
+      toast(`Standardplan „${sp.name}" aktualisiert.`, 'ok');
+    });
+  });
+  c.querySelectorAll('[data-del-sp]').forEach(b => {
+    b.addEventListener('click', () => {
+      const sp = state.standardplaene.find(x => x.id === b.dataset.delSp);
+      if (!sp) return;
+      if (!confirm(`Standardplan „${sp.name}" wirklich löschen?`)) return;
+      state.standardplaene = state.standardplaene.filter(x => x.id !== sp.id);
+      markEdit();
+      renderStandardList();
+      renderStandardSelect();
+    });
+  });
+}
+
+function renderStandardSelect() {
+  const sel = document.getElementById('standardSelect');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Standardplan wählen —</option>' +
+    state.standardplaene.map(sp =>
+      `<option value="${sp.id}">${esc(sp.name)}</option>`
+    ).join('');
+  sel.value = cur;
+  // hide quick panel if no standardplaene exist
+  const panel = document.getElementById('standardQuickPanel');
+  if (panel) {
+    panel.style.display = state.standardplaene.length > 0 ? '' : 'none';
+  }
+}
+
+function applyStandard(spId, switchTab) {
+  const sp = state.standardplaene.find(x => x.id === spId);
+  if (!sp) return;
+  const hasContent = Object.keys(state.plan).length > 0 || Object.keys(bedarfeAkutFilled()).length > 0;
+  if (hasContent && !confirm(`Standardplan „${sp.name}" laden? Der aktuelle Plan und die aktuellen Bedarfe werden überschrieben.\n\n(Stamm-Bedarfe und Historie bleiben unverändert.)`)) return;
+  state.bedarfe = JSON.parse(JSON.stringify(sp.bedarfe || {}));
+  state.plan = JSON.parse(JSON.stringify(sp.plan || {}));
+  state.tage = JSON.parse(JSON.stringify(sp.tage || state.tage));
+  if (sp.maxKinderProTag) state.maxKinderProTag = sp.maxKinderProTag;
+  markEdit();
+  if (switchTab) {
+    document.querySelector('nav.tabs button[data-tab="planer"]').click();
+  } else {
+    renderPlanner();
+    renderTageConfig();
+  }
+  const mk = document.getElementById('maxKinderProTag');
+  if (mk) mk.value = state.maxKinderProTag;
+  toast(`Standardplan „${sp.name}" geladen.`, 'ok');
+}
+
+document.getElementById('btnApplyStandard').addEventListener('click', () => {
+  const id = document.getElementById('standardSelect').value;
+  if (!id) { toast('Bitte einen Standardplan wählen.', 'err'); return; }
+  applyStandard(id, false);
+});
+
+document.getElementById('btnNewStandard').addEventListener('click', () => {
+  const akut = bedarfeAkutFilled();
+  if (Object.keys(akut).length === 0 && Object.keys(state.plan).length === 0) {
+    toast('Es sind weder Bedarfe noch ein Plan vorhanden.', 'err');
+    return;
+  }
+  const name = prompt('Name des Standardplans (z.B. „Notbetreuung Kernzeiten"):');
+  if (!name || !name.trim()) return;
+  const beschreibung = prompt('Beschreibung (optional, z.B. wann anwenden):', '') || '';
+  state.standardplaene.push({
+    id: 's' + Date.now(),
+    name: name.trim(),
+    beschreibung: beschreibung.trim(),
+    bedarfe: JSON.parse(JSON.stringify(state.bedarfe)),
+    plan: JSON.parse(JSON.stringify(state.plan)),
+    tage: JSON.parse(JSON.stringify(state.tage)),
+    maxKinderProTag: state.maxKinderProTag,
+    createdAt: new Date().toISOString()
+  });
+  markEdit();
+  renderStandardList();
+  renderStandardSelect();
+  toast(`Standardplan „${name.trim()}" gespeichert.`, 'ok');
+});
+
+/* ===================================================================
+   ELTERN INFORMIEREN (Notify-Parents)
+   =================================================================== */
+
+const NOTIFY_DAY_FMT = { Montag:'Montag', Dienstag:'Dienstag', Mittwoch:'Mittwoch', Donnerstag:'Donnerstag', Freitag:'Freitag', Samstag:'Samstag', Sonntag:'Sonntag' };
+
+function buildNotifyMail(kind, zeitraum, absender, zusatz) {
+  const alloc = state.plan[kind.id] || {};
+  const need = state.bedarfe[kind.id] || {};
+  const lines = [];
+  const zeitTxt = zeitraum ? ` für ${zeitraum}` : '';
+
+  lines.push(`Liebe Eltern von ${kind.name},`);
+  lines.push('');
+
+  // Check if any allocation exists
+  let totalAllocH = 0;
+  const allocDays = [];
+  for (const t of state.tage) {
+    const a = alloc[t.name];
+    if (a && a.von && a.bis) {
+      const h = durH(a.von, a.bis);
+      totalAllocH += h;
+      allocDays.push({ tag: t.name, von: a.von, bis: a.bis, hours: h });
+    }
+  }
+
+  if (allocDays.length === 0) {
+    // Refusal
+    lines.push(`leider konnten wir Ihrem Kind${zeitTxt} keinen Platz in der Notbetreuung anbieten. Wir wissen, dass das für Sie eine schwierige Nachricht ist, und bitten um Ihr Verständnis.`);
+    lines.push('');
+    // Show what was requested, if any
+    let neededDays = [];
+    for (const t of state.tage) {
+      const n = need[t.name];
+      if (n && !n.none && n.von && n.bis) neededDays.push(`${t.name}: ${n.von}–${n.bis}`);
+    }
+    if (neededDays.length > 0) {
+      lines.push(`Sie hatten folgenden Bedarf gemeldet:`);
+      neededDays.forEach(d => lines.push(`  • ${d}`));
+      lines.push('');
+    }
+    lines.push(`Bei Rückfragen oder Änderungen melden Sie sich bitte gerne bei uns.`);
+  } else {
+    lines.push(`hiermit informieren wir Sie über die Notbetreuungs-Zuteilung${zeitTxt} für Ihr Kind ${kind.name}.`);
+    lines.push('');
+    lines.push(`Wir können folgende Betreuungszeiten anbieten:`);
+    lines.push('');
+    for (const d of allocDays) {
+      lines.push(`  • ${d.tag}: ${d.von} – ${d.bis} Uhr  (${d.hours.toFixed(2).replace('.',',')} Std.)`);
+    }
+    lines.push('');
+    lines.push(`Gesamt: ${totalAllocH.toFixed(2).replace('.',',')} Stunden`);
+
+    // Compare to need
+    const diffNotes = [];
+    let hasDayWithoutAlloc = false;
+    let hasShorterAlloc = false;
+    let hasLongerAlloc = false;
+    for (const t of state.tage) {
+      const n = need[t.name];
+      const a = alloc[t.name];
+      if (n && !n.none && n.von && n.bis) {
+        if (!a || !a.von) { hasDayWithoutAlloc = true; }
+        else {
+          if (timeToMin(a.von) > timeToMin(n.von) || timeToMin(a.bis) < timeToMin(n.bis)) hasShorterAlloc = true;
+          if (timeToMin(a.von) < timeToMin(n.von) || timeToMin(a.bis) > timeToMin(n.bis)) hasLongerAlloc = true;
+        }
+      } else if ((!n || n.none) && a && a.von) {
+        // assigned a day without requested need — unusual, mention
+        diffNotes.push(`Am ${t.name} haben wir Ihnen einen Platz angeboten, obwohl Sie keinen Bedarf gemeldet hatten.`);
+      }
+    }
+    if (hasDayWithoutAlloc || hasShorterAlloc) {
+      lines.push('');
+      lines.push(`Hinweis: Die Zuteilung weicht teilweise von Ihrem gemeldeten Bedarf ab. Aufgrund begrenzter Kapazitäten können wir leider nicht jeden Wunsch vollständig erfüllen. Wir bemühen uns, die verfügbaren Stunden möglichst gerecht auf alle Familien zu verteilen.`);
+    }
+    diffNotes.forEach(n => { lines.push(''); lines.push(n); });
+    lines.push('');
+    lines.push(`Bei Rückfragen oder wenn sich an Ihrem Bedarf etwas ändert, melden Sie sich bitte umgehend bei uns.`);
+  }
+
+  if (zusatz && zusatz.trim()) {
+    lines.push('');
+    lines.push(zusatz.trim());
+  }
+
+  lines.push('');
+  lines.push('Mit freundlichen Grüßen');
+  if (absender && absender.trim()) {
+    lines.push(absender.trim());
+  }
+
+  const subject = allocDays.length === 0
+    ? `Notbetreuung${zeitraum ? ' ' + zeitraum : ''} – Ihre Anfrage`
+    : `Notbetreuung${zeitraum ? ' ' + zeitraum : ''} – Zuteilung für ${kind.name}`;
+
+  return { subject, body: lines.join('\n'), hasAlloc: allocDays.length > 0 };
+}
+
+function isPlanAccepted() {
+  // Check whether the current plan matches the most recent history entry's plan
+  if (state.history.length === 0) return false;
+  const last = state.history[state.history.length - 1];
+  if (!last || !last.plan) return false;
+  // Compare plan content (ignoring null entries)
+  const norm = (p) => {
+    const r = {};
+    for (const kid in (p||{})) {
+      const days = {};
+      for (const t in p[kid]) {
+        const v = p[kid][t];
+        if (v && v.von && v.bis) days[t] = { von: v.von, bis: v.bis };
+      }
+      if (Object.keys(days).length > 0) r[kid] = days;
+    }
+    return r;
+  };
+  const a = JSON.stringify(norm(state.plan));
+  const b = JSON.stringify(norm(last.plan));
+  return a === b;
+}
+
+document.getElementById('btnNotifyParents').addEventListener('click', () => {
+  if (state.kinder.length === 0) { toast('Keine Kinder erfasst.', 'err'); return; }
+  // Pre-fill from existing state
+  document.getElementById('notifyZeitraum').value = state.abfrage.zeitraum || '';
+  document.getElementById('notifyAbsender').value = state.abfrage.absender || '';
+  document.getElementById('notifyZusatz').value = '';
+  // Warning if plan not accepted
+  const wEl = document.getElementById('notifyWarning');
+  wEl.style.display = isPlanAccepted() ? 'none' : 'block';
+  renderNotifyPreviews();
+  document.getElementById('modalNotify').classList.add('show');
+});
+
+document.getElementById('btnNotifyClose').addEventListener('click', () => {
+  document.getElementById('modalNotify').classList.remove('show');
+});
+
+document.getElementById('btnNotifyRefresh').addEventListener('click', renderNotifyPreviews);
+
+['notifyZeitraum','notifyAbsender','notifyZusatz'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderNotifyPreviews);
+});
+
+function getNotifyMails() {
+  const zeitraum = document.getElementById('notifyZeitraum').value.trim();
+  const absender = document.getElementById('notifyAbsender').value.trim();
+  const zusatz = document.getElementById('notifyZusatz').value;
+  const mails = [];
+  for (const kind of [...state.kinder].sort((a,b) => a.name.localeCompare(b.name))) {
+    const m = buildNotifyMail(kind, zeitraum, absender, zusatz);
+    mails.push({ kind, ...m });
+  }
+  return mails;
+}
+
+function renderNotifyPreviews() {
+  const mails = getNotifyMails();
+  const c = document.getElementById('notifyPreviewList');
+  let withAlloc = 0, withoutAlloc = 0, noEmail = 0;
+  let html = '';
+  mails.forEach((m, i) => {
+    if (m.hasAlloc) withAlloc++; else withoutAlloc++;
+    const hasEmail = m.kind.email && m.kind.email.includes('@');
+    if (!hasEmail) noEmail++;
+    const statusLabel = !hasEmail
+      ? '<span class="pill bad">Keine E-Mail hinterlegt</span>'
+      : (m.hasAlloc ? '<span class="pill good">Zuteilung</span>' : '<span class="pill warn">Absage</span>');
+    html += `<div class="notify-card" data-i="${i}">
+      <div class="notify-card-head">
+        <strong>${esc(m.kind.name)}</strong>
+        <span style="font-size: 11px; color: var(--ink-mute); font-family: var(--mono);">${esc(m.kind.email || '—')}</span>
+        ${statusLabel}
+        <button class="btn ghost notify-open" data-i="${i}" ${hasEmail?'':'disabled'} style="margin-left: auto;">Diese Mail öffnen</button>
+      </div>
+      <details style="margin-top: 6px;">
+        <summary style="cursor:pointer; font-size: 11px; color: var(--ink-soft);">Vorschau (Betreff &amp; Body)</summary>
+        <div style="margin-top: 6px; padding: 8px; background: var(--bg-card); border-radius: var(--r); font-family: var(--mono); font-size: 11px; white-space: pre-wrap;"><strong>Betreff:</strong> ${esc(m.subject)}
+
+${esc(m.body)}</div>
+      </details>
+    </div>`;
+  });
+  c.innerHTML = html || '<div class="empty-state">Keine Kinder vorhanden.</div>';
+  document.getElementById('notifySummary').textContent =
+    `${withAlloc} Zuteilung${withAlloc===1?'':'en'} · ${withoutAlloc} Absage${withoutAlloc===1?'':'n'}${noEmail>0 ? ` · ${noEmail} ohne E-Mail` : ''}`;
+
+  c.querySelectorAll('.notify-open').forEach(b => {
+    b.addEventListener('click', () => {
+      const i = parseInt(b.dataset.i);
+      openNotifyMail(mails[i]);
+    });
+  });
+}
+
+function openNotifyMail(m) {
+  if (!m.kind.email || !m.kind.email.includes('@')) {
+    toast(`Keine E-Mail für ${m.kind.name} hinterlegt.`, 'err');
+    return;
+  }
+  const link = `mailto:${encodeURIComponent(m.kind.email)}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
+  window.location.href = link;
+}
+
+document.getElementById('btnNotifyOpenAll').addEventListener('click', async () => {
+  const mails = getNotifyMails().filter(m => m.kind.email && m.kind.email.includes('@'));
+  if (mails.length === 0) { toast('Keine Mails mit gültiger Adresse vorhanden.', 'err'); return; }
+  if (!confirm(`${mails.length} Mail-Fenster werden nacheinander geöffnet (mit kurzer Pause zwischen den Aufrufen). Fortfahren?`)) return;
+  for (let i = 0; i < mails.length; i++) {
+    const m = mails[i];
+    const link = `mailto:${encodeURIComponent(m.kind.email)}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
+    window.open(link, '_blank');
+    // Small delay to avoid hammering the OS mail handler
+    await new Promise(r => setTimeout(r, 700));
+  }
+  toast(`${mails.length} Mails geöffnet.`, 'ok');
+});
+
+/* ===================================================================
+   TAB 6: FILE - Markdown export/import
+   =================================================================== */
+
+function serializeMd() {
+  const lines = [];
+  lines.push('# Notbetreuungs-Stand');
+  lines.push('');
+  lines.push(`- Version: ${state.meta.version}`);
+  lines.push(`- Stand: ${new Date().toISOString()}`);
+  lines.push('');
+
+  // Abfrage
+  lines.push('## Abfrage-Einstellungen');
+  lines.push('');
+  lines.push('```yaml');
+  lines.push(`zeitraum: ${JSON.stringify(state.abfrage.zeitraum || '')}`);
+  lines.push(`deadline: ${JSON.stringify(state.abfrage.deadline || '')}`);
+  lines.push(`absender: ${JSON.stringify(state.abfrage.absender || '')}`);
+  lines.push(`max_kinder_pro_tag: ${state.maxKinderProTag}`);
+  lines.push('einleitung: |');
+  (state.abfrage.einleitung||'').split('\n').forEach(l => lines.push('  ' + l));
+  lines.push('```');
+  lines.push('');
+
+  // Tage
+  lines.push('## Tageszeiten');
+  lines.push('');
+  lines.push('| Tag | Von | Bis |');
+  lines.push('|---|---|---|');
+  state.tage.forEach(t => lines.push(`| ${t.name} | ${t.von} | ${t.bis} |`));
+  lines.push('');
+
+  // Kinder
+  lines.push('## Kinder');
+  lines.push('');
+  lines.push('| ID | Name | Gruppe | Vertrag (h) | E-Mail | Kumul. Notbetr. (h) |');
+  lines.push('|---|---|---|---|---|---|');
+  state.kinder.forEach(k => {
+    lines.push(`| ${k.id} | ${escMd(k.name)} | ${escMd(k.gruppe)} | ${k.vertragH} | ${escMd(k.email)} | ${k.kumulH} |`);
+  });
+  lines.push('');
+
+  // Stamm-Bedarfe (Schuljahresabfrage)
+  lines.push('## Stamm-Bedarfe');
+  lines.push('');
+  lines.push('<!-- Persistente Bedarfe aus der Schuljahresabfrage. Dienen als Vorlage für Stand-/Notpläne. -->');
+  lines.push('```yaml');
+  writeBedarfeBlock(lines, state.bedarfeStamm, state.tage);
+  lines.push('```');
+  lines.push('');
+
+  // Bedarfe (akut)
+  lines.push('## Bedarfe');
+  lines.push('');
+  lines.push('<!-- Aktuell aktive Bedarfe (für die aktuelle Notbetreuungssituation). -->');
+  lines.push('```yaml');
+  writeBedarfeBlock(lines, state.bedarfe, state.tage);
+  lines.push('```');
+  lines.push('');
+
+  // Aktueller Plan
+  lines.push('## Aktueller Plan');
+  lines.push('');
+  lines.push('```yaml');
+  writePlanBlock(lines, state.plan, state.tage);
+  lines.push('```');
+  lines.push('');
+
+  // Standardpläne
+  lines.push('## Standardpläne');
+  lines.push('');
+  for (const sp of state.standardplaene) {
+    lines.push(`### ${sp.name}`);
+    lines.push('');
+    lines.push('```yaml');
+    lines.push(`id: ${sp.id}`);
+    lines.push(`createdAt: ${sp.createdAt || ''}`);
+    if (sp.updatedAt) lines.push(`updatedAt: ${sp.updatedAt}`);
+    lines.push(`maxKinderProTag: ${sp.maxKinderProTag || state.maxKinderProTag}`);
+    if (sp.beschreibung) {
+      lines.push('beschreibung: |');
+      sp.beschreibung.split('\n').forEach(l => lines.push('  ' + l));
+    }
+    lines.push('tage:');
+    (sp.tage||state.tage).forEach(t => lines.push(`  - { name: "${t.name}", von: "${t.von}", bis: "${t.bis}" }`));
+    lines.push('bedarfe:');
+    for (const kid in (sp.bedarfe||{})) {
+      const b = sp.bedarfe[kid];
+      lines.push(`  ${kid}:`);
+      for (const t of (sp.tage||state.tage)) {
+        const e = b[t.name];
+        if (!e) continue;
+        if (e.none) lines.push(`    ${t.name}: none`);
+        else if (e.von) lines.push(`    ${t.name}: "${e.von}-${e.bis}"`);
+      }
+    }
+    lines.push('plan:');
+    for (const kid in (sp.plan||{})) {
+      lines.push(`  ${kid}:`);
+      for (const t of (sp.tage||state.tage)) {
+        const e = sp.plan[kid][t.name];
+        if (e && e.von) lines.push(`    ${t.name}: "${e.von}-${e.bis}"`);
+      }
+    }
+    lines.push('```');
+    lines.push('');
+  }
+
+  // Historie
+  lines.push('## Historie');
+  lines.push('');
+  for (const h of state.history) {
+    lines.push(`### ${h.label}`);
+    lines.push('');
+    lines.push('```yaml');
+    lines.push(`id: ${h.id}`);
+    lines.push(`ts: ${h.ts}`);
+    lines.push('tage:');
+    h.tage.forEach(t => lines.push(`  - { name: "${t.name}", von: "${t.von}", bis: "${t.bis}" }`));
+    lines.push('snapshot_kumul:');
+    for (const kid in h.snapshotKumul) lines.push(`  ${kid}: ${h.snapshotKumul[kid]}`);
+    lines.push('plan:');
+    for (const kid in h.plan) {
+      lines.push(`  ${kid}:`);
+      for (const t of h.tage) {
+        const e = h.plan[kid][t.name];
+        if (e && e.von) lines.push(`    ${t.name}: "${e.von}-${e.bis}"`);
+      }
+    }
+    lines.push('bedarfe:');
+    for (const kid in (h.bedarfe||{})) {
+      const b = h.bedarfe[kid];
+      lines.push(`  ${kid}:`);
+      for (const t of h.tage) {
+        const e = b[t.name];
+        if (!e) continue;
+        if (e.none) lines.push(`    ${t.name}: none`);
+        else if (e.von) lines.push(`    ${t.name}: "${e.von}-${e.bis}"`);
+      }
+    }
+    lines.push('```');
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+function escMd(s) { return String(s||'').replace(/\|/g, '\\|'); }
+
+function writeBedarfeBlock(lines, source, tage) {
+  for (const kid of state.kinder) {
+    const b = source[kid.id];
+    if (!b) continue;
+    // skip if completely empty (all none/null)
+    const anyContent = Object.values(b).some(v => v && (v.von || v.raw));
+    if (!anyContent && !Object.values(b).some(v => v && v.none)) continue;
+    lines.push(`${kid.id}:  # ${kid.name}`);
+    for (const t of tage) {
+      const e = b[t.name];
+      if (!e) lines.push(`  ${t.name}: null`);
+      else if (e.none) lines.push(`  ${t.name}: none`);
+      else if (e.von && e.bis) lines.push(`  ${t.name}: "${e.von}-${e.bis}"`);
+      else if (e.raw) lines.push(`  ${t.name}: "raw:${e.raw}"`);
+    }
+  }
+}
+
+function writePlanBlock(lines, source, tage) {
+  for (const kid of state.kinder) {
+    const p = source[kid.id];
+    if (!p) continue;
+    let any = false;
+    for (const t of tage) if (p[t.name] && p[t.name].von) { any = true; break; }
+    if (!any) continue;
+    lines.push(`${kid.id}:  # ${kid.name}`);
+    for (const t of tage) {
+      const e = p[t.name];
+      if (e && e.von && e.bis) lines.push(`  ${t.name}: "${e.von}-${e.bis}"`);
+    }
+  }
+}
+
+function splitMdRow(ln) {
+  // Split markdown table row by unescaped |
+  const parts = [];
+  let cur = '';
+  for (let i = 0; i < ln.length; i++) {
+    const c = ln[i];
+    if (c === '\\' && ln[i+1] === '|') { cur += '|'; i++; }
+    else if (c === '|') { parts.push(cur); cur = ''; }
+    else cur += c;
+  }
+  parts.push(cur);
+  // drop empty leading/trailing cells and trim
+  return parts.slice(1, -1).map(s => s.trim());
+}
+
+function deserializeMd(md) {
+  // Robust enough parser for our own format
+  const lines = md.split(/\r?\n/);
+  const newState = JSON.parse(JSON.stringify(state));
+  newState.kinder = [];
+  newState.bedarfe = {};
+  newState.bedarfeStamm = {};
+  newState.plan = {};
+  newState.history = [];
+  newState.standardplaene = [];
+  newState.tage = [];
+
+  let section = null;
+  let codeBuf = null;
+  let codeLang = null;
+  let histCurrent = null;
+  let spCurrent = null;
+
+  function processYamlBlock(yaml, sec, ctxObj) {
+    if (sec === 'abfrage') {
+      const obj = parseSimpleYaml(yaml);
+      if (obj.zeitraum !== undefined) newState.abfrage.zeitraum = obj.zeitraum;
+      if (obj.deadline !== undefined) newState.abfrage.deadline = obj.deadline;
+      if (obj.absender !== undefined) newState.abfrage.absender = obj.absender;
+      if (obj.max_kinder_pro_tag !== undefined) newState.maxKinderProTag = parseInt(obj.max_kinder_pro_tag);
+      if (obj.einleitung !== undefined) newState.abfrage.einleitung = obj.einleitung;
+    } else if (sec === 'bedarfe' || sec === 'bedarfeStamm') {
+      const target = sec === 'bedarfeStamm' ? newState.bedarfeStamm : newState.bedarfe;
+      const obj = parseNestedYaml(yaml);
+      for (const kid in obj) {
+        target[kid] = {};
+        for (const day in obj[kid]) {
+          const v = obj[kid][day];
+          if (v === 'none' || v === null || v === 'null') target[kid][day] = { none: true };
+          else if (typeof v === 'string') {
+            const m = v.match(/(\d{2}:\d{2})-(\d{2}:\d{2})/);
+            if (m) target[kid][day] = { von: m[1], bis: m[2] };
+            else if (v.startsWith('raw:')) target[kid][day] = { raw: v.slice(4) };
+          }
+        }
+      }
+    } else if (sec === 'plan') {
+      const obj = parseNestedYaml(yaml);
+      for (const kid in obj) {
+        newState.plan[kid] = {};
+        for (const day in obj[kid]) {
+          const v = obj[kid][day];
+          if (typeof v === 'string') {
+            const m = v.match(/(\d{2}:\d{2})-(\d{2}:\d{2})/);
+            if (m) newState.plan[kid][day] = { von: m[1], bis: m[2] };
+          }
+        }
+      }
+    } else if (sec === 'history') {
+      const h = parseHistoryYaml(yaml);
+      if (h) {
+        if (ctxObj && ctxObj.label) h.label = ctxObj.label;
+        newState.history.push(h);
+      }
+    } else if (sec === 'standard') {
+      const sp = parseStandardYaml(yaml);
+      if (sp) {
+        if (ctxObj && ctxObj.name) sp.name = ctxObj.name;
+        newState.standardplaene.push(sp);
+      }
+    }
+  }
+
+  for (let i=0;i<lines.length;i++) {
+    const ln = lines[i];
+    if (ln.startsWith('## ')) {
+      const sec = ln.slice(3).trim().toLowerCase();
+      if (sec.startsWith('abfrage')) section = 'abfrage';
+      else if (sec.startsWith('tageszeit')) section = 'tage';
+      else if (sec.startsWith('kinder')) section = 'kinder';
+      else if (sec.startsWith('stamm-bedarfe') || sec.startsWith('stammbedarfe')) section = 'bedarfeStamm';
+      else if (sec.startsWith('bedarfe')) section = 'bedarfe';
+      else if (sec.startsWith('aktueller plan')) section = 'plan';
+      else if (sec.startsWith('standardpl')) section = 'standard';
+      else if (sec.startsWith('historie')) section = 'history';
+      else section = null;
+      histCurrent = null;
+      spCurrent = null;
+      continue;
+    }
+    if (ln.startsWith('### ') && section === 'history') {
+      histCurrent = { label: ln.slice(4).trim() };
+      continue;
+    }
+    if (ln.startsWith('### ') && section === 'standard') {
+      spCurrent = { name: ln.slice(4).trim() };
+      continue;
+    }
+    if (ln.startsWith('```')) {
+      if (codeBuf === null) {
+        codeBuf = [];
+        codeLang = ln.slice(3).trim();
+      } else {
+        const yaml = codeBuf.join('\n');
+        if (section === 'history') {
+          processYamlBlock(yaml, 'history', histCurrent);
+        } else if (section === 'standard') {
+          processYamlBlock(yaml, 'standard', spCurrent);
+        } else {
+          processYamlBlock(yaml, section);
+        }
+        codeBuf = null;
+        codeLang = null;
+      }
+      continue;
+    }
+    if (codeBuf !== null) {
+      codeBuf.push(ln);
+      continue;
+    }
+    // table lines - split on unescaped pipe only
+    if (section === 'tage' && ln.startsWith('| ') && !ln.startsWith('|---') && !/\| Tag \|/i.test(ln)) {
+      const parts = splitMdRow(ln);
+      if (parts.length >= 3) {
+        newState.tage.push({ name: parts[0], von: parts[1], bis: parts[2] });
+      }
+    }
+    if (section === 'kinder' && ln.startsWith('| ') && !ln.startsWith('|---') && !/\| ID \|/i.test(ln)) {
+      const parts = splitMdRow(ln);
+      if (parts.length >= 6) {
+        newState.kinder.push({
+          id: parts[0],
+          name: parts[1],
+          gruppe: parts[2],
+          vertragH: parseFloat(parts[3]) || 0,
+          email: parts[4],
+          kumulH: parseFloat(parts[5]) || 0
+        });
+      }
+    }
+  }
+
+  if (newState.tage.length === 0) newState.tage = DEFAULT_DAYS.map(d => ({ name: d, von: '07:15', bis: '16:00' }));
+
+  return newState;
+}
+
+// Minimal YAML-ish parser for our own controlled output
+function parseSimpleYaml(text) {
+  const out = {};
+  const lines = text.split('\n');
+  let multiKey = null;
+  let multiLines = [];
+  for (const ln of lines) {
+    if (multiKey) {
+      if (ln.startsWith('  ')) {
+        multiLines.push(ln.slice(2));
+        continue;
+      } else {
+        out[multiKey] = multiLines.join('\n');
+        multiKey = null;
+        multiLines = [];
+      }
+    }
+    const m = ln.match(/^(\w+):\s*(.*)$/);
+    if (!m) continue;
+    if (m[2] === '|') {
+      multiKey = m[1];
+      multiLines = [];
+    } else {
+      let v = m[2];
+      if (v.startsWith('"') && v.endsWith('"')) v = JSON.parse(v);
+      out[m[1]] = v;
+    }
+  }
+  if (multiKey) out[multiKey] = multiLines.join('\n');
+  return out;
+}
+
+function parseNestedYaml(text) {
+  // top-level keys = id; nested keys (2-space-indent) = day -> value
+  const out = {};
+  const lines = text.split('\n');
+  let cur = null;
+  for (const ln of lines) {
+    if (!ln.trim() || ln.trim().startsWith('#')) continue;
+    if (!ln.startsWith(' ')) {
+      const m = ln.match(/^(\S+):\s*(.*?)(?:\s*#.*)?$/);
+      if (m) { cur = m[1]; out[cur] = {}; }
+    } else if (cur) {
+      const m = ln.match(/^\s{2,}(\w+):\s*(.*?)(?:\s*#.*)?$/);
+      if (m) {
+        let v = m[2];
+        if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1,-1);
+        out[cur][m[1]] = v;
+      }
+    }
+  }
+  return out;
+}
+
+function parseHistoryYaml(text) {
+  // dedicated parser for our history block format
+  const h = { plan: {}, snapshotKumul: {}, tage: [], bedarfe: {} };
+  const lines = text.split('\n');
+  let mode = null;
+  let currentKid = null;
+  for (const ln of lines) {
+    if (!ln.trim() || ln.trim().startsWith('#')) continue;
+    if (/^id:\s*/.test(ln)) { h.id = ln.replace(/^id:\s*/,'').trim(); continue; }
+    if (/^ts:\s*/.test(ln)) { h.ts = ln.replace(/^ts:\s*/,'').trim(); continue; }
+    if (/^tage:\s*$/.test(ln)) { mode = 'tage'; continue; }
+    if (/^snapshot_kumul:\s*$/.test(ln)) { mode = 'sk'; continue; }
+    if (/^plan:\s*$/.test(ln)) { mode = 'plan'; currentKid = null; continue; }
+    if (/^bedarfe:\s*$/.test(ln)) { mode = 'bedarfe'; currentKid = null; continue; }
+    if (mode === 'tage' && ln.trim().startsWith('-')) {
+      const m = ln.match(/name:\s*"([^"]+)",\s*von:\s*"([^"]+)",\s*bis:\s*"([^"]+)"/);
+      if (m) h.tage.push({ name: m[1], von: m[2], bis: m[3] });
+    } else if (mode === 'sk') {
+      const m = ln.match(/^\s{2}(\S+):\s*([\d\.]+)/);
+      if (m) h.snapshotKumul[m[1]] = parseFloat(m[2]);
+    } else if (mode === 'plan' || mode === 'bedarfe') {
+      const target = mode === 'plan' ? h.plan : h.bedarfe;
+      if (/^\s{2}(\S+):\s*$/.test(ln)) {
+        currentKid = ln.match(/^\s{2}(\S+):/)[1];
+        target[currentKid] = {};
+      } else if (currentKid && /^\s{4}/.test(ln)) {
+        const m = ln.match(/^\s{4}(\w+):\s*"?([^"]*)"?/);
+        if (m) {
+          const v = m[2];
+          if (mode === 'plan') {
+            const tm = v.match(/(\d{2}:\d{2})-(\d{2}:\d{2})/);
+            if (tm) target[currentKid][m[1]] = { von: tm[1], bis: tm[2] };
+          } else {
+            if (v === 'none') target[currentKid][m[1]] = { none: true };
+            else {
+              const tm = v.match(/(\d{2}:\d{2})-(\d{2}:\d{2})/);
+              if (tm) target[currentKid][m[1]] = { von: tm[1], bis: tm[2] };
+            }
+          }
+        }
+      }
+    }
+  }
+  return h;
+}
+
+function parseStandardYaml(text) {
+  // Standardplan block: id, createdAt, updatedAt?, maxKinderProTag, beschreibung?, tage, bedarfe, plan
+  const sp = { plan: {}, bedarfe: {}, tage: [] };
+  const lines = text.split('\n');
+  let mode = null;
+  let currentKid = null;
+  let beschreibungLines = null;
+  for (const ln of lines) {
+    if (beschreibungLines !== null) {
+      if (ln.startsWith('  ') && !/^\s*\w+:/.test(ln.replace(/^\s\s/,''))) {
+        beschreibungLines.push(ln.slice(2));
+        continue;
+      } else {
+        sp.beschreibung = beschreibungLines.join('\n').trim();
+        beschreibungLines = null;
+      }
+    }
+    if (!ln.trim() || ln.trim().startsWith('#')) continue;
+    if (/^id:\s*/.test(ln)) { sp.id = ln.replace(/^id:\s*/,'').trim(); continue; }
+    if (/^createdAt:\s*/.test(ln)) { sp.createdAt = ln.replace(/^createdAt:\s*/,'').trim(); continue; }
+    if (/^updatedAt:\s*/.test(ln)) { sp.updatedAt = ln.replace(/^updatedAt:\s*/,'').trim(); continue; }
+    if (/^maxKinderProTag:\s*/.test(ln)) {
+      sp.maxKinderProTag = parseInt(ln.replace(/^maxKinderProTag:\s*/,'').trim()) || 20;
+      continue;
+    }
+    if (/^beschreibung:\s*\|/.test(ln)) { beschreibungLines = []; continue; }
+    if (/^beschreibung:\s*/.test(ln)) {
+      let v = ln.replace(/^beschreibung:\s*/,'').trim();
+      if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1,-1);
+      sp.beschreibung = v;
+      continue;
+    }
+    if (/^tage:\s*$/.test(ln)) { mode = 'tage'; continue; }
+    if (/^plan:\s*$/.test(ln)) { mode = 'plan'; currentKid = null; continue; }
+    if (/^bedarfe:\s*$/.test(ln)) { mode = 'bedarfe'; currentKid = null; continue; }
+    if (mode === 'tage' && ln.trim().startsWith('-')) {
+      const m = ln.match(/name:\s*"([^"]+)",\s*von:\s*"([^"]+)",\s*bis:\s*"([^"]+)"/);
+      if (m) sp.tage.push({ name: m[1], von: m[2], bis: m[3] });
+    } else if (mode === 'plan' || mode === 'bedarfe') {
+      const target = mode === 'plan' ? sp.plan : sp.bedarfe;
+      if (/^\s{2}(\S+):\s*$/.test(ln)) {
+        currentKid = ln.match(/^\s{2}(\S+):/)[1];
+        target[currentKid] = {};
+      } else if (currentKid && /^\s{4}/.test(ln)) {
+        const m = ln.match(/^\s{4}(\w+):\s*"?([^"]*)"?/);
+        if (m) {
+          const v = m[2];
+          if (mode === 'plan') {
+            const tm = v.match(/(\d{2}:\d{2})-(\d{2}:\d{2})/);
+            if (tm) target[currentKid][m[1]] = { von: tm[1], bis: tm[2] };
+          } else {
+            if (v === 'none') target[currentKid][m[1]] = { none: true };
+            else {
+              const tm = v.match(/(\d{2}:\d{2})-(\d{2}:\d{2})/);
+              if (tm) target[currentKid][m[1]] = { von: tm[1], bis: tm[2] };
+            }
+          }
+        }
+      }
+    }
+  }
+  if (beschreibungLines !== null) sp.beschreibung = beschreibungLines.join('\n').trim();
+  if (!sp.id) sp.id = 's' + Date.now() + Math.floor(Math.random()*1000);
+  if (!sp.createdAt) sp.createdAt = new Date().toISOString();
+  return sp;
+}
+
+/* ---------- Export / Import file ---------- */
+function downloadText(filename, text) {
+  const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+}
+
+document.getElementById('btnExport').addEventListener('click', exportNow);
+document.getElementById('btnQuickExport').addEventListener('click', exportNow);
+
+function exportNow() {
+  const md = serializeMd();
+  const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,16);
+  downloadText(`notbetreuung_${stamp}.md`, md);
+  toast('Stand exportiert.', 'ok');
+}
+
+document.getElementById('btnImportFile').addEventListener('click', () => {
+  document.getElementById('importFile').click();
+});
+document.getElementById('importFile').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const text = await f.text();
+  try {
+    const newState = deserializeMd(text);
+    if (!confirm(`Stand laden? Aktuelle Daten werden ersetzt.\n\nGefunden: ${newState.kinder.length} Kinder, ${newState.history.length} Historie-Einträge.`)) return;
+    Object.assign(state, newState);
+    markEdit();
+    renderAll();
+    toast('Stand geladen.', 'ok');
+  } catch (err) {
+    console.error(err);
+    toast('Datei konnte nicht gelesen werden.', 'err');
+  }
+  e.target.value = '';
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  if (!confirm('Wirklich ALLE Daten zurücksetzen? Dies kann nicht rückgängig gemacht werden.')) return;
+  state.kinder = [];
+  state.bedarfe = {};
+  state.bedarfeStamm = {};
+  state.plan = {};
+  state.standardplaene = [];
+  state.history = [];
+  state.tage = DEFAULT_DAYS.map(d => ({ name: d, von: '07:15', bis: '16:00' }));
+  state.abfrage = { zeitraum: '', deadline: '', absender: '', einleitung: state.abfrage.einleitung };
+  markEdit();
+  renderAll();
+  toast('Zurückgesetzt.', 'ok');
+});
+
+function renderMarkdownPreview() {
+  document.getElementById('markdownView').textContent = serializeMd();
+}
+
+/* ===================================================================
+   Misc
+   =================================================================== */
+function markEdit() {
+  state.meta.lastEdit = new Date().toISOString();
+  const m = document.getElementById('metaInfo');
+  m.textContent = `${state.kinder.length} Kinder · zuletzt: ${new Date().toLocaleTimeString('de-DE')}`;
+  // autosave to sessionStorage (local volatile cache, NOT persisted across browser close by default)
+  try {
+    sessionStorage.setItem('notbetr_state', JSON.stringify(state));
+  } catch (e) {}
+}
+
+function tryRestoreSession() {
+  try {
+    const s = sessionStorage.getItem('notbetr_state');
+    if (s) {
+      const parsed = JSON.parse(s);
+      Object.assign(state, parsed);
+    }
+  } catch (e) {}
+  // backward-compat: ensure new fields exist on old saved sessions
+  if (!state.bedarfeStamm) state.bedarfeStamm = {};
+  if (!state.standardplaene) state.standardplaene = [];
+}
+
+function renderAll() {
+  renderKinder();
+  renderTageConfig();
+  renderPlanner();
+  renderBedarfeView();
+  renderStammStatus();
+  renderHistory();
+  renderStandardList();
+  renderStandardSelect();
+  renderMailPreview();
+  renderMarkdownPreview();
+}
+
+// initial einleitung (sample)
+state.abfrage.einleitung = `Liebe Eltern,
+
+aufgrund der aktuellen Situation müssen wir Notbetreuung organisieren. Bitte teilen Sie uns Ihren Bedarf für den unten genannten Zeitraum mit, indem Sie den Antwortblock unten ausfüllen und an uns zurücksenden.
+
+Bitte ändern Sie nicht die Struktur des Antwortblocks – Sie können Zeilen leer lassen oder mit „nein" markieren, wenn Sie an dem Tag keinen Bedarf haben.
+
+Zeitformat: Bitte tragen Sie die Uhrzeiten im 24-Stunden-Format mit Doppelpunkt ein, also HH:MM (z.B. 07:15 oder 14:30). Eine vollständige Zeile sieht z.B. so aus:
+   Montag: von 07:30 bis 14:00`;
+
+tryRestoreSession();
+renderAll();
+markEdit();
+
+</script>
+</body>
+</html>
