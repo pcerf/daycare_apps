@@ -1694,7 +1694,9 @@ function parseTimeRange(s) {
   // template leaves in — parents often forget to delete them when filling
   // in times. Repeat to strip multiple groups.
   t = t.replace(/(?:\s*\([^)]*\))+\s*$/g, '').trim();
-  t = t.replace(/^von\s+/i, '');
+  // Trailing punctuation ("8:30 bis 14:00.") and a leading "von"/"ab".
+  t = t.replace(/[\s.,;!]+$/, '').trim();
+  t = t.replace(/^(?:von|ab)\s+/i, '');
   // Allow a trailing "Uhr"/"h" that covers the whole range
   t = t.replace(/\s*(?:Uhr|uhr|h)\s*$/i, '').trim();
   // Separators: "bis" (word), or any dash variant
@@ -1891,7 +1893,7 @@ async function parseMsgFile(file) {
   } catch (e) {
     console.warn('msg parser failed for', file.name, e);
     // fallback: aggressive scan for utf-16le text containing our marker
-    return { text: scanForMarker(buf), senderEmail: '' };
+    return { text: scanForMarker(buf), senderEmail: '', senderName: '' };
   }
 }
 
@@ -2097,8 +2099,22 @@ function extractTextFromMsg(buf) {
     const s = decode(readEntry(c.entry), w.uni).trim();
     if (s && s.includes('@')) { senderEmail = s; break; }
   }
+  // Sender display name: PR_SENDER_NAME (0C1A), PR_SENT_REPRESENTING_NAME (0042).
+  const nameTags = [
+    {tag:'0C1A', typ:'001F', uni:true},
+    {tag:'0C1A', typ:'001E', uni:false},
+    {tag:'0042', typ:'001F', uni:true},
+    {tag:'0042', typ:'001E', uni:false},
+  ];
+  let senderName = '';
+  for (const w of nameTags) {
+    const c = candidates.find(c => c.tag === w.tag && c.typ === w.typ);
+    if (!c) continue;
+    const s = decode(readEntry(c.entry), w.uni).replace(/\0+$/, '').trim();
+    if (s) { senderName = s; break; }
+  }
 
-  return { text: bodyText, senderEmail };
+  return { text: bodyText, senderEmail, senderName };
 }
 
 function concatBytes(arr) {
@@ -2115,9 +2131,13 @@ function stripHtml(html) {
   return html.replace(/<style[\s\S]*?<\/style>/gi,'')
              .replace(/<script[\s\S]*?<\/script>/gi,'')
              .replace(/<br\s*\/?>/gi,'\n')
-             .replace(/<\/p>/gi,'\n')
+             .replace(/<\/(?:p|div|li|tr|h[1-6])>/gi,'\n')
              .replace(/<[^>]+>/g,'')
-             .replace(/&nbsp;/g,' ')
+             .replace(/&nbsp;|&#160;/g,' ')
+             .replace(/&ndash;|&#8211;/g,'–')
+             .replace(/&auml;/g,'ä').replace(/&ouml;/g,'ö').replace(/&uuml;/g,'ü')
+             .replace(/&Auml;/g,'Ä').replace(/&Ouml;/g,'Ö').replace(/&Uuml;/g,'Ü')
+             .replace(/&szlig;/g,'ß')
              .replace(/&amp;/g,'&')
              .replace(/&lt;/g,'<')
              .replace(/&gt;/g,'>')
@@ -2165,67 +2185,221 @@ function indexOf(haystack, needle, from=0) {
   return -1;
 }
 
-/* ---------- Answer block parser ---------- */
-function parseAnswerBlock(text) {
-  // find [NOTBETREUUNG-ANTWORT ... [ENDE ANTWORT]
-  const startIdx = text.indexOf('[NOTBETREUUNG-ANTWORT');
-  if (startIdx < 0) return null;
-  const endIdx = text.indexOf('[ENDE ANTWORT]', startIdx);
-  if (endIdx < 0) return null;
-  const block = text.slice(startIdx, endIdx);
-  const lines = block.split(/\r?\n/);
-  const result = { name: '', gruppe: '', tage: {}, bemerkungen: '' };
+/* ---------- Answer block parser ----------
+   Parents do not always keep the answer block intact: they fill in times
+   between the "____" placeholders, delete the [NOTBETREUUNG-ANTWORT] /
+   [ENDE ANTWORT] markers, retype the lines in their own words
+   ("Montag 8:15 bis 14 Uhr", "Dienstag NEIN", "Betreuungsbedarf für Max:")
+   or answer above the quoted original mail. The parser therefore
+   1. prefers a marker block that actually contains answers, and otherwise
+   2. scans the whole text for groups of day lines and takes the group with
+      the most answers (a single isolated day line – e.g. the example line in
+      the quoted introduction text – is ignored). */
+const DAY_ABBR = {
+  mo:'Montag', montag:'Montag',
+  di:'Dienstag', dienstag:'Dienstag',
+  mi:'Mittwoch', mittwoch:'Mittwoch',
+  do:'Donnerstag', donnerstag:'Donnerstag',
+  fr:'Freitag', freitag:'Freitag',
+  sa:'Samstag', samstag:'Samstag',
+  so:'Sonntag', sonntag:'Sonntag',
+};
+
+// Normalize one raw text line: strip mail-quote markers ("> ", ">> ", …),
+// bullet characters and markdown/Outlook bold asterisks.
+function cleanAnswerLine(rawLn) {
+  return String(rawLn)
+    .replace(/ /g, ' ')
+    .replace(/^[>\s]*>+\s*/, '')
+    .replace(/^[•*·]\s*/, '')
+    .replace(/^-\s+/, '')
+    .replace(/\*/g, '')
+    .trim();
+}
+
+// Day line, e.g. "Montag: von 07:30 bis 14:00", "Mo: nein", "Di.: 9-14",
+// "Montag 8:15 bis 14 Uhr", "Dienstag NEIN", "Mittwoch : 8:15 bis 14 Uhr",
+// "Montag, 09.11.: 8-14", "Montags: 8-14".
+const DAY_LINE_RE = /^(Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag|Mo|Di|Mi|Do|Fr|Sa|So)(s?)\b\.?((?:\s*,?\s*(?:den\s+)?\d{1,2}\.\d{1,2}\.(?:\d{2,4})?)?(?:\s*\([^)]*\))?)\s*([:,]?)\s*(.*)$/i;
+
+// Returns { day, entry, state } or null. state is
+//   'time'    – a parseable time range
+//   'none'    – explicitly no need ("nein", "kein Bedarf", "—")
+//   'empty'   – untouched template line ("von ____:____ bis ____:____")
+//   'raw'     – something was written that we cannot interpret
+function parseDayLine(line) {
+  const m = line.match(DAY_LINE_RE);
+  if (!m) return null;
+  const short = m[1].length <= 2;
+  const hasSep = !!m[4];
+  const rest0 = m[5];
+  // Without ":" the rest must look like an answer, so normal sentences
+  // starting with a weekday ("Montag ist mein Mann zu Hause") are skipped.
+  // Two-letter abbreviations ("So", "Do") without separator need a digit
+  // or nein/kein right after them ("So, hier die Zeiten" is no day line).
+  if (!hasSep) {
+    if (rest0 === '' && !short) { /* bare "Montag" – treat as empty line */ }
+    else if (!/^(?:von\b|ab\b|nein\b|kein|nicht\b|entf|\d|_|[-–—]+\s*$)/i.test(rest0)) return null;
+  } else if (m[4] === ',' && short && !/^(?:von\b|ab\b|nein\b|kein|\d|_)/i.test(rest0)) {
+    return null;
+  }
+  if (short && m[2]) return null; // "Mos", "Dis" are no abbreviations
+  const day = DAY_ABBR[m[1].toLowerCase()] || m[1];
+
+  // Remove fill-in underscores and the template hint "(oder: nein)".
+  let rest = rest0
+    .replace(/\(\s*oder\s*:?\s*nein\s*\)/gi, ' ')
+    .replace(/_+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (/\d/.test(rest)) {
+    const range = parseTimeRange(rest);
+    if (range) return { day, entry: range, state: 'time' };
+    if (/^(?:nein|kein)/i.test(rest)) return { day, entry: { none: true }, state: 'none' };
+    return { day, entry: { raw: rest }, state: 'raw' };
+  }
+  if (/^(?:[-–—]+|x|✕|✗)$/i.test(rest) || /\b(?:nein|kein\w*|nicht|entf[äa]llt|frei)\b/i.test(rest)) {
+    return { day, entry: { none: true }, state: 'none' };
+  }
+  // Only template leftovers ("von : bis :") → untouched line.
+  if (rest.replace(/\b(?:von|bis|ab|uhr)\b/gi, '').replace(/[\s:.,\-–—]/g, '') === '') {
+    return { day, entry: { none: true }, state: 'empty' };
+  }
+  return { day, entry: { raw: rest }, state: 'raw' };
+}
+
+// Name lines: "Kind: Max", "Kind : Max", "Name des Kindes: Max",
+// "Betreuungsbedarf für Max:" (optionally followed by the first day line).
+function parseNameLine(line) {
+  let m = line.match(/^(?:Kind|Name\s+des\s+Kindes|Kindername|Name\s+Kind)\s*:\s*(.*)$/i);
+  if (!m) m = line.match(/^(?:Notbetreuungs-?)?(?:Betreuungs)?bedarf\s+(?:für|fuer|von)\s+(.+?)\s*:?\s*$/i);
+  if (!m) return null;
+  const nm = m[1].replace(/\[.*?\]/g, '').replace(/\s*:\s*$/, '').trim();
+  // "Bedarf von Montag bis Freitag", "Bedarf von 8 bis 14" are no names.
+  if (/\d/.test(nm) || /^(?:Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)\b/i.test(nm)) return null;
+  return nm;
+}
+function parseGruppeLine(line) {
+  const m = line.match(/^Gruppe\s*:\s*(.*)$/i);
+  if (!m) return null;
+  return m[1].replace(/\[.*?\]/g, '').trim();
+}
+
+// Parse a list of (already cleaned) lines into an answer object.
+// For each day the first real answer wins; untouched template lines or
+// unreadable text may be replaced by a later real answer.
+function parseAnswerLines(lines) {
+  const result = { name: '', gruppe: '', tage: {}, bemerkungen: '', unklar: {}, filled: 0, dayLines: 0 };
+  const states = {};
   let inBemerk = false;
-  let bemerkLines = [];
-  const DAY_ABBR = {
-    mo:'Montag', montag:'Montag',
-    di:'Dienstag', dienstag:'Dienstag',
-    mi:'Mittwoch', mittwoch:'Mittwoch',
-    do:'Donnerstag', donnerstag:'Donnerstag',
-    fr:'Freitag', freitag:'Freitag',
-    sa:'Samstag', samstag:'Samstag',
-    so:'Sonntag', sonntag:'Sonntag',
-  };
-  for (const rawLn of lines) {
-    // Strip leading mail-quote markers ("> ", ">> ", …) so replies that
-    // edit inside the quoted block still parse. Also strip leading bullet
-    // characters that some parents add when reformatting.
-    let line = rawLn.replace(/^[>\s]*>+\s*/, '').replace(/^[•*]\s+/, '').replace(/^-\s+/, '').trim();
-    if (/^Kind\s*:/i.test(line)) {
-      result.name = line.replace(/^Kind\s*:\s*/i, '').replace(/\[.*?\]/g,'').trim();
-      continue;
-    }
-    if (/^Gruppe\s*:/i.test(line)) {
-      result.gruppe = line.replace(/^Gruppe\s*:\s*/i, '').replace(/\[.*?\]/g,'').trim();
-      continue;
-    }
-    if (/^Bemerkungen?\s*:/i.test(line)) {
+  const bemerkLines = [];
+  const rank = { empty: 0, raw: 1, none: 2, time: 2 };
+  for (const line of lines) {
+    const nm = parseNameLine(line);
+    if (nm !== null) { inBemerk = false; if (nm && !result.name) result.name = nm; continue; }
+    const gr = parseGruppeLine(line);
+    if (gr !== null) { inBemerk = false; if (gr && !result.gruppe) result.gruppe = gr; continue; }
+    if (/^Bemerkung(?:en)?\s*:/i.test(line)) {
       inBemerk = true;
-      bemerkLines.push(line.replace(/^Bemerkungen?\s*:\s*/i,''));
+      bemerkLines.push(line.replace(/^Bemerkung(?:en)?\s*:\s*/i, ''));
       continue;
     }
-    // day line: "Montag: von 07:30 bis 14:00" or "Mo: nein" or "Di.: 9-14"
-    const dayMatch = line.match(/^(Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag|Mo|Di|Mi|Do|Fr|Sa|So)\.?\s*:\s*(.*)$/i);
-    if (dayMatch) {
+    const d = parseDayLine(line);
+    if (d) {
       inBemerk = false;
-      const day = DAY_ABBR[dayMatch[1].toLowerCase()] || dayMatch[1];
-      const rest = dayMatch[2].trim();
-      if (/^(nein|kein|keine|--+|—)/i.test(rest) || rest === '' || /(?:von\s*)?_+\s*[:.]?\s*_+/i.test(rest)) {
-        result.tage[day] = { none: true };
-      } else {
-        const range = parseTimeRange(rest);
-        if (range) {
-          result.tage[day] = range;
-        } else {
-          result.tage[day] = { raw: rest };
-        }
+      result.dayLines++;
+      const prev = states[d.day];
+      if (prev === undefined || rank[d.state] > rank[prev]) {
+        result.tage[d.day] = d.entry;
+        states[d.day] = d.state;
       }
       continue;
     }
-    if (inBemerk) bemerkLines.push(line);
+    if (inBemerk && !/^\[ENDE/i.test(line)) bemerkLines.push(line);
   }
-  result.bemerkungen = bemerkLines.join(' ').trim();
+  for (const [day, st] of Object.entries(states)) {
+    if (st === 'time' || st === 'none') result.filled++;
+    if (st === 'raw') { result.unklar[day] = result.tage[day].raw; result.filled++; }
+  }
+  result.bemerkungen = bemerkLines.join(' ').replace(/_{3,}/g, '').replace(/\s+/g, ' ').trim();
   return result;
+}
+
+function stripParseMeta(r) {
+  const { filled, dayLines, ...rest } = r;
+  return rest;
+}
+
+function parseAnswerBlock(text) {
+  if (!text) return null;
+  const allLines = String(text).split(/\r?\n|\r/).map(cleanAnswerLine);
+
+  // 1) Marker blocks. A block ends at [ENDE ANTWORT], at the next start
+  //    marker, or at the end of the text (parents sometimes delete the end
+  //    marker).
+  const blocks = [];
+  let cur = null;
+  for (const line of allLines) {
+    if (line.includes('[NOTBETREUUNG-ANTWORT')) {
+      if (cur) blocks.push(cur);
+      cur = [];
+      continue;
+    }
+    if (cur) {
+      if (line.includes('[ENDE ANTWORT]')) { blocks.push(cur); cur = null; continue; }
+      cur.push(line);
+    }
+  }
+  if (cur) blocks.push(cur);
+  const parsedBlocks = blocks.map(parseAnswerLines);
+  const filledBlock = parsedBlocks.find(b => b.filled > 0);
+  if (filledBlock) return stripParseMeta(filledBlock);
+
+  // 2) Free-form fallback: groups of day lines (at most 3 other lines in
+  //    between). A group needs at least two day lines.
+  const groups = [];
+  let g = null, gap = 0;
+  allLines.forEach((line, i) => {
+    if (parseDayLine(line)) {
+      if (g && gap <= 3) g.end = i;
+      else { g = { start: i, end: i }; groups.push(g); }
+      gap = 0;
+    } else if (g) {
+      if (line !== '') gap++;
+    }
+  });
+  let best = null;
+  for (const grp of groups) {
+    // Include a few lines above the group for "Kind:" / "Gruppe:" lines.
+    let from = grp.start;
+    for (let j = grp.start - 1, n = 0; j >= 0 && n < 6; j--) {
+      if (allLines[j] === '') continue;
+      n++;
+      if (parseNameLine(allLines[j]) !== null || parseGruppeLine(allLines[j]) !== null) from = j;
+    }
+    // …and a few lines below for "Bemerkungen:".
+    let to = grp.end;
+    for (let j = grp.end + 1; j < allLines.length && j <= grp.end + 3; j++) {
+      if (/^Bemerkung(?:en)?\s*:/i.test(allLines[j])) { to = Math.min(allLines.length - 1, j + 2); break; }
+    }
+    const r = parseAnswerLines(allLines.slice(from, to + 1));
+    if (r.dayLines < 2 || r.filled === 0) continue;
+    if (!best || r.filled > best.filled) best = r;
+  }
+  if (best) {
+    if (!best.name || !best.gruppe) {
+      // Name may be further away (e.g. in the greeting line of the parent).
+      const whole = parseAnswerLines(allLines.filter(l => parseDayLine(l) === null));
+      if (!best.name) best.name = whole.name;
+      if (!best.gruppe) best.gruppe = whole.gruppe;
+    }
+    return stripParseMeta(best);
+  }
+
+  // 3) Only an untouched (or entirely "nein") marker block.
+  if (parsedBlocks.length) return stripParseMeta(parsedBlocks[0]);
+  return null;
 }
 
 function findKindByAnswer(ans, senderEmail) {
@@ -2250,7 +2424,8 @@ function findKindByAnswer(ans, senderEmail) {
   // so e.g. an empty/garbled "Kind:" line still finds the right family.
   if (senderEmail && senderEmail.includes('@')) {
     const se = senderEmail.toLowerCase().trim();
-    const byEmail = state.kinder.find(k => (k.email || '').toLowerCase().trim() === se);
+    // The email field may hold several addresses ("a@x.de; b@y.de").
+    const byEmail = state.kinder.find(k => (k.email || '').toLowerCase().split(/[\s,;]+/).includes(se));
     if (byEmail) return byEmail;
   }
   return null;
@@ -2261,13 +2436,35 @@ document.getElementById('btnPickMsg').addEventListener('click', () => {
   document.getElementById('msgFiles').click();
 });
 
-// Extract a single email address from a "From: ..." header (RFC822 / .eml)
-function extractFromHeader(text) {
+// Find the "From:" / "Von:" header line of a mail (RFC822 / .eml, or a mail
+// pasted from Outlook with its header). Only the leading header section (up
+// to the first blank line) is searched, so the "Von:" line of the quoted
+// original mail – i.e. the Kita's own address – is not mistaken for the
+// sender.
+function findFromHeaderLine(text) {
   if (!text) return '';
-  const m = text.match(/^From:\s*(.+)$/mi);
-  if (!m) return '';
-  const em = m[1].match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/);
+  const head = String(text).replace(/^\s+/, '').split(/\r?\n[ \t]*\r?\n/)[0];
+  const m = head.match(/^(?:From|Von)\s*:\s*(.+)$/mi);
+  return m ? m[1].trim() : '';
+}
+// Extract a single email address from the sender header.
+function extractFromHeader(text) {
+  const line = findFromHeaderLine(text);
+  const em = line.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/);
   return em ? em[0] : '';
+}
+// Extract the display name from the sender header ("Max Muster <max@…>").
+function extractFromName(text) {
+  const line = findFromHeaderLine(text);
+  const nm = line.replace(/<[^>]*>/g, '').replace(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g, '')
+    .replace(/["']/g, '').replace(/[()\[\]]/g, '').trim();
+  return nm;
+}
+// "Name <mail>" for display; empty string if nothing is known.
+function formatSender(r) {
+  const n = (r.senderName || '').trim(), e = (r.senderEmail || '').trim();
+  if (n && e && n.toLowerCase() !== e.toLowerCase()) return `${n} <${e}>`;
+  return e || n;
 }
 
 document.getElementById('msgFiles').addEventListener('change', async e => {
@@ -2276,17 +2473,19 @@ document.getElementById('msgFiles').addEventListener('change', async e => {
   document.getElementById('importStatus').textContent = `Verarbeite ${files.length} Datei(en)…`;
   const results = [];
   for (const file of files) {
-    let text = '', senderEmail = '';
+    let text = '', senderEmail = '', senderName = '';
     if (file.name.toLowerCase().endsWith('.msg')) {
       const parsed = await parseMsgFile(file);
       text = parsed.text || '';
       senderEmail = parsed.senderEmail || '';
+      senderName = parsed.senderName || '';
     } else {
       text = await file.text();
       senderEmail = extractFromHeader(text);
+      senderName = extractFromName(text);
     }
     const ans = parseAnswerBlock(text);
-    results.push({ file: file.name, ans, senderEmail, raw: text.length });
+    results.push({ file: file.name, ans, senderEmail, senderName, raw: text.length });
   }
   applyImportResults(results);
   e.target.value = '';
@@ -2296,49 +2495,48 @@ function applyImportResults(results) {
   const container = document.getElementById('importResults');
   let ok = 0, fail = 0, ambig = 0;
   const out = [];
+  const pending = []; // unmatched answers, bound to their entry after rendering
+  const senderHtml = r => {
+    const s = formatSender(r);
+    return s
+      ? `<div class="hist-meta">Absender: <strong>${esc(s)}</strong></div>`
+      : `<div class="hist-meta">Absender: unbekannt</div>`;
+  };
+  // Day lines the parser could not interpret – shown so they can be fixed
+  // manually in the table below.
+  const unklarHtml = ans => {
+    const u = Object.entries(ans.unklar || {}).filter(([d]) => state.tage.some(t => t.name === d));
+    if (!u.length) return '';
+    return `<div class="hist-meta" style="color: var(--warn)">Nicht erkannt (bitte unten von Hand eintragen): ${u.map(([d, v]) => `${esc(d)}: „${esc(v)}"`).join(' · ')}</div>`;
+  };
   for (const r of results) {
     if (!r.ans) {
-      out.push(`<div class="history-entry" style="border-color: var(--bad)"><strong>${esc(r.file)}</strong><div class="hist-meta">Kein gültiger Antwortblock gefunden.</div></div>`);
+      out.push(`<div class="history-entry" style="border-color: var(--bad)"><strong>${esc(r.file)}</strong>${senderHtml(r)}<div class="hist-meta">Kein gültiger Antwortblock gefunden.</div></div>`);
       fail++;
       continue;
     }
     const kind = findKindByAnswer(r.ans, r.senderEmail);
     if (!kind) {
+      const idx = pending.length;
+      pending.push(r);
+      const who = r.ans.name ? `Antwort für „${esc(r.ans.name)}"` : 'Antwort ohne Kindername';
       out.push(`
-        <div class="history-entry" style="border-color: var(--warn)">
+        <div class="history-entry" style="border-color: var(--warn)" data-pending="${idx}">
           <strong>${esc(r.file)}</strong>
-          <div class="hist-meta">Antwort von „${esc(r.ans.name)}" – kein passendes Kind gefunden.</div>
+          ${senderHtml(r)}
+          <div class="hist-meta">${who}${r.ans.gruppe ? ` (Gruppe ${esc(r.ans.gruppe)})` : ''} – kein passendes Kind gefunden.</div>
+          <div class="hist-meta">${summarizeBedarf(answerToBedarf(r.ans))}</div>
+          ${unklarHtml(r.ans)}
           <div class="hist-actions">
-            <select id="assign_${r.ans.name.replace(/\W/g,'_')}_${Math.random().toString(36).slice(2,5)}">
+            <select>
               <option value="">— neues Kind anlegen —</option>
-              ${state.kinder.map(k => `<option value="${k.id}">${esc(k.name)} (${esc(k.gruppe)})</option>`).join('')}
+              ${state.kinder.map(k => `<option value="${k.id}">${esc(k.name)} (${esc(k.gruppe)})${k.email ? ' – ' + esc(k.email) : ''}</option>`).join('')}
             </select>
             <button class="btn ghost btn-assign">Zuordnen</button>
           </div>
         </div>
       `);
       ambig++;
-      // attach handler after insertion
-      setTimeout(() => {
-        const lastEntry = container.querySelectorAll('.history-entry')[container.querySelectorAll('.history-entry').length-1];
-        const sel = lastEntry.querySelector('select');
-        const btn = lastEntry.querySelector('.btn-assign');
-        if (!btn) return;
-        btn.addEventListener('click', () => {
-          let k;
-          if (sel.value) k = state.kinder.find(x => x.id === sel.value);
-          else {
-            k = { id: uid(), name: r.ans.name, gruppe: r.ans.gruppe, vertragH: 35, email: '', kumulH: 0 };
-            state.kinder.push(k);
-          }
-          state.bedarfe[k.id] = answerToBedarf(r.ans);
-          markEdit();
-          renderKinder();
-          renderBedarfeView();
-          toast(`Zuordnung gespeichert.`, 'ok');
-          lastEntry.style.opacity = '0.5';
-        });
-      }, 50);
       continue;
     }
     state.bedarfe[kind.id] = answerToBedarf(r.ans);
@@ -2347,10 +2545,36 @@ function applyImportResults(results) {
       <div class="history-entry" style="border-color: var(--good)">
         <strong>${esc(r.file)}</strong> → ${esc(kind.name)}
         <div class="hist-meta">${summarizeBedarf(state.bedarfe[kind.id])}</div>
+        ${unklarHtml(r.ans)}
       </div>
     `);
   }
   container.innerHTML = out.join('') || '<div class="empty-state">Keine Ergebnisse.</div>';
+  container.querySelectorAll('.history-entry[data-pending]').forEach(entry => {
+    const r = pending[+entry.dataset.pending];
+    const sel = entry.querySelector('select');
+    const btn = entry.querySelector('.btn-assign');
+    btn.addEventListener('click', () => {
+      let k;
+      if (sel.value) {
+        k = state.kinder.find(x => x.id === sel.value);
+        if (!k) return;
+        // Remember the sender address so the next reply is matched automatically.
+        if (!k.email && r.senderEmail) k.email = r.senderEmail;
+      } else {
+        k = { id: uid(), name: r.ans.name || r.senderName || r.senderEmail || 'Unbekannt', gruppe: r.ans.gruppe, vertragH: 35, email: r.senderEmail || '', kumulH: 0 };
+        state.kinder.push(k);
+      }
+      state.bedarfe[k.id] = answerToBedarf(r.ans);
+      markEdit();
+      renderKinder();
+      renderBedarfeView();
+      toast(`Zuordnung gespeichert.`, 'ok');
+      entry.style.opacity = '0.5';
+      btn.disabled = true;
+      sel.disabled = true;
+    });
+  });
   document.getElementById('importStatus').textContent =
     `${ok} erfolgreich · ${ambig} mehrdeutig · ${fail} fehlgeschlagen`;
   markEdit();
@@ -2450,9 +2674,11 @@ document.getElementById('btnPasteImport').addEventListener('click', () => {
   const blocks = txt.split(/^---+$/m);
   const results = [];
   blocks.forEach((b, i) => {
+    if (!b.trim()) return;
     const ans = parseAnswerBlock(b);
     const senderEmail = extractFromHeader(b);
-    results.push({ file: `Einfügung ${i+1}`, ans, senderEmail, raw: b.length });
+    const senderName = extractFromName(b);
+    results.push({ file: `Einfügung ${i+1}`, ans, senderEmail, senderName, raw: b.length });
   });
   applyImportResults(results);
   document.getElementById('modalPaste').classList.remove('show');
