@@ -428,6 +428,23 @@
     font-weight: 600;
   }
   details.coll[open] { padding-bottom: 12px; }
+  details.coll.orig-mail { margin-top: 8px; padding: 4px 10px; }
+  details.coll.orig-mail[open] { padding-bottom: 8px; }
+  pre.orig-mail-text {
+    margin: 8px 0 0;
+    max-height: 360px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--ink-soft);
+    background: var(--bg-card);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r);
+    padding: 8px 10px;
+  }
 
   code.kbd {
     font-family: var(--mono);
@@ -2546,7 +2563,7 @@ document.getElementById('msgFiles').addEventListener('change', async e => {
       senderName = extractFromName(text);
     }
     const ans = parseAnswerBlock(text);
-    results.push({ file: file.name, ans, senderEmail, senderName, raw: text.length });
+    results.push({ file: file.name, ans, senderEmail, senderName, text, raw: text.length });
   }
   applyImportResults(results);
   e.target.value = '';
@@ -2563,6 +2580,12 @@ function applyImportResults(results) {
       ? `<div class="hist-meta">Absender: <strong>${esc(s)}</strong></div>`
       : `<div class="hist-meta">Absender: unbekannt</div>`;
   };
+  // Collapsible original mail text, so the assignment can be checked.
+  const originalHtml = r => {
+    const t = String(r.text || '').replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    if (!t) return '';
+    return `<details class="coll orig-mail"><summary>Original-Mail anzeigen</summary><pre class="orig-mail-text">${esc(t)}</pre></details>`;
+  };
   // Day lines the parser could not interpret – shown so they can be fixed
   // manually in the table below.
   const unklarHtml = ans => {
@@ -2572,7 +2595,7 @@ function applyImportResults(results) {
   };
   for (const r of results) {
     if (!r.ans) {
-      out.push(`<div class="history-entry" style="border-color: var(--bad)"><strong>${esc(r.file)}</strong>${senderHtml(r)}<div class="hist-meta">Kein gültiger Antwortblock gefunden.</div></div>`);
+      out.push(`<div class="history-entry" style="border-color: var(--bad)"><strong>${esc(r.file)}</strong>${senderHtml(r)}<div class="hist-meta">Kein gültiger Antwortblock gefunden.</div>${originalHtml(r)}</div>`);
       fail++;
       continue;
     }
@@ -2596,6 +2619,7 @@ function applyImportResults(results) {
             </select>
             <button class="btn ghost btn-assign">Zuordnen</button>
           </div>
+          ${originalHtml(r)}
         </div>
       `);
       ambig++;
@@ -2609,6 +2633,7 @@ function applyImportResults(results) {
         <span style="color:var(--ink-mute); font-size: 11px;">(${match.via === 'email' ? 'per Absenderadresse' : 'per Name'})</span>
         <div class="hist-meta">${summarizeBedarf(state.bedarfe[kind.id])}</div>
         ${unklarHtml(r.ans)}
+        ${originalHtml(r)}
       </div>
     `);
   }
@@ -2745,7 +2770,7 @@ document.getElementById('btnPasteImport').addEventListener('click', () => {
     const ans = parseAnswerBlock(b);
     const senderEmail = extractFromHeader(b);
     const senderName = extractFromName(b);
-    results.push({ file: `Einfügung ${i+1}`, ans, senderEmail, senderName, raw: b.length });
+    results.push({ file: `Einfügung ${i+1}`, ans, senderEmail, senderName, text: b.trim(), raw: b.length });
   });
   applyImportResults(results);
   document.getElementById('modalPaste').classList.remove('show');
