@@ -428,6 +428,23 @@
     font-weight: 600;
   }
   details.coll[open] { padding-bottom: 12px; }
+  details.coll.orig-mail { margin-top: 8px; padding: 4px 10px; }
+  details.coll.orig-mail[open] { padding-bottom: 8px; }
+  pre.orig-mail-text {
+    margin: 8px 0 0;
+    max-height: 360px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--ink-soft);
+    background: var(--bg-card);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r);
+    padding: 8px 10px;
+  }
 
   code.kbd {
     font-family: var(--mono);
@@ -1696,7 +1713,7 @@ function parseTimeRange(s) {
   t = t.replace(/(?:\s*\([^)]*\))+\s*$/g, '').trim();
   // Trailing punctuation ("8:30 bis 14:00.") and a leading "von"/"ab".
   t = t.replace(/[\s.,;!]+$/, '').trim();
-  t = t.replace(/^(?:von|ab)\s+/i, '');
+  t = t.replace(/^(?:von|ab)(?:\s+|(?=\d))/i, ''); // also "von08:15"
   // Allow a trailing "Uhr"/"h" that covers the whole range
   t = t.replace(/\s*(?:Uhr|uhr|h)\s*$/i, '').trim();
   // Separators: "bis" (word), or any dash variant
@@ -2209,8 +2226,12 @@ const DAY_ABBR = {
 // bullet characters and markdown/Outlook bold asterisks.
 function cleanAnswerLine(rawLn) {
   return String(rawLn)
-    .replace(/ /g, ' ')
+    .replace(/\u00A0/g, ' ')
     .replace(/^[>\s]*>+\s*/, '')
+    // Links that mail clients attach to recognized times/dates in the
+    // plain-text version, e.g. "14:45 <x-apple-data-detectors://6>" (Apple
+    // Mail), "<tel:…>" or "<https://…>".
+    .replace(/\s*<[a-z][a-z0-9+.\-]*:[^<>\s]*>/gi, '')
     .replace(/^[•*·]\s*/, '')
     .replace(/^-\s+/, '')
     .replace(/\*/g, '')
@@ -2239,8 +2260,8 @@ function parseDayLine(line) {
   // or nein/kein right after them ("So, hier die Zeiten" is no day line).
   if (!hasSep) {
     if (rest0 === '' && !short) { /* bare "Montag" – treat as empty line */ }
-    else if (!/^(?:von\b|ab\b|nein\b|kein|nicht\b|entf|\d|_|[-–—]+\s*$)/i.test(rest0)) return null;
-  } else if (m[4] === ',' && short && !/^(?:von\b|ab\b|nein\b|kein|\d|_)/i.test(rest0)) {
+    else if (!/^(?:von(?![a-zäöü])|ab(?![a-zäöü])|nein\b|kein|nicht\b|entf|\d|_|[-–—]+\s*$)/i.test(rest0)) return null;
+  } else if (m[4] === ',' && short && !/^(?:von(?![a-zäöü])|ab(?![a-zäöü])|nein\b|kein|\d|_)/i.test(rest0)) {
     return null;
   }
   if (short && m[2]) return null; // "Mos", "Dis" are no abbreviations
@@ -2402,33 +2423,90 @@ function parseAnswerBlock(text) {
   return null;
 }
 
+/* ---------- Matching an answer to a child ----------
+   1. Sender address: a child's email field may hold several parent
+      addresses separated by ";". If exactly one child has the sender
+      address, it is used – unless the name in the answer clearly belongs to
+      a different child. If several children share the address (siblings),
+      the name, then the group decides between them.
+   2. Otherwise the name: compared word by word, never as a substring (so
+      "Lia" does not match "Kilian"); "M." matches a last name starting with
+      "M". The best-scoring child wins; on a tie the group decides.
+   Without a clear match null is returned and the answer is listed as
+   "kein passendes Kind gefunden" for manual assignment. */
+const EMAIL_RE = /[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g;
+function emailList(s) {
+  return (String(s || '').match(EMAIL_RE) || []).map(e => e.toLowerCase());
+}
+// "Kilian Müller-Lüdenscheidt (Eisbären)" → ["kilian","mueller","luedenscheidt"]
+// Abbreviations keep their dot: "Kilian M." → ["kilian","m."]
+function nameWords(s) {
+  return String(s || '').toLowerCase()
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\./g, '. ')
+    .replace(/[^a-z0-9.\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w && w !== '.');
+}
+// How well does the answer's name fit a child's name? 0 = not at all.
+function nameScore(kidName, ansName) {
+  const kw = nameWords(kidName).map(w => w.replace(/\.$/, ''));
+  const aw = nameWords(ansName);
+  if (!kw.length || !aw.length) return 0;
+  if (kw.join(' ') === aw.map(w => w.replace(/\.$/, '')).join(' ')) return 100;
+  let matched = 0;
+  const used = new Set();
+  for (const w0 of aw) {
+    const abbr = /^[a-z]\.?$/.test(w0);
+    const w = w0.replace(/\.$/, '');
+    const i = kw.findIndex((k, idx) => !used.has(idx) && (k === w || (abbr && k.startsWith(w))));
+    if (i >= 0) { used.add(i); matched += abbr ? 0.5 : 1; }
+  }
+  if (matched < 1) return 0; // a lone initial is no match
+  // Bonus when every word of the child's name was found.
+  return matched + (used.size === kw.length ? 10 : 0);
+}
+function sameGroup(k, ans) {
+  const a = nameWords(ans.gruppe).join(' ');
+  return !!a && nameWords(k.gruppe).join(' ') === a;
+}
+// The single best child of `kids` by name (group as tie-break), or null.
+function bestByName(kids, ans) {
+  if (!ans.name) return null;
+  const scored = kids
+    .map(k => ({ k, s: nameScore(k.name, ans.name) }))
+    .filter(x => x.s > 0)
+    .map(x => ({ k: x.k, s: x.s + (sameGroup(x.k, ans) ? 0.25 : 0) }))
+    .sort((x, y) => y.s - x.s);
+  if (!scored.length) return null;
+  if (scored.length > 1 && scored[1].s === scored[0].s) return null; // ambiguous
+  return scored[0].k;
+}
+// Returns { kind, via: 'email' | 'name' } or null.
 function findKindByAnswer(ans, senderEmail) {
-  const norm = s => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  if (ans.name) {
-    let candidate = state.kinder.find(k => norm(k.name) === norm(ans.name));
-    if (candidate) return candidate;
-    // partial match: all words of ans.name must be in kid.name
-    const aw = norm(ans.name).split(' ').filter(Boolean);
-    if (aw.length) {
-      candidate = state.kinder.find(k => {
-        const kw = norm(k.name).split(' ');
-        return aw.every(w => kw.includes(w));
-      });
-      if (candidate) return candidate;
+  const se = emailList(senderEmail)[0] || '';
+  const byEmail = se ? state.kinder.filter(k => emailList(k.email).includes(se)) : [];
+  const byName = bestByName(state.kinder, ans);
+
+  if (byEmail.length === 1) {
+    const k = byEmail[0];
+    // The name clearly belongs to another child (e.g. a parent answering
+    // for a friend's child) → let the user decide.
+    if (byName && byName !== k && nameScore(k.name, ans.name) === 0) return null;
+    return { kind: k, via: 'email' };
+  }
+  if (byEmail.length > 1) {
+    // Siblings sharing an address: decide by name, then by group.
+    const k = bestByName(byEmail, ans);
+    if (k) return { kind: k, via: 'email' };
+    if (!ans.name) {
+      const g = byEmail.filter(x => sameGroup(x, ans));
+      if (g.length === 1) return { kind: g[0], via: 'email' };
     }
-    // substring (either direction)
-    candidate = state.kinder.find(k => norm(k.name).includes(norm(ans.name)) || norm(ans.name).includes(norm(k.name)));
-    if (candidate) return candidate;
+    return null;
   }
-  // Last resort: match by sender email. Only used when name matching fails,
-  // so e.g. an empty/garbled "Kind:" line still finds the right family.
-  if (senderEmail && senderEmail.includes('@')) {
-    const se = senderEmail.toLowerCase().trim();
-    // The email field may hold several addresses ("a@x.de; b@y.de").
-    const byEmail = state.kinder.find(k => (k.email || '').toLowerCase().split(/[\s,;]+/).includes(se));
-    if (byEmail) return byEmail;
-  }
-  return null;
+  return byName ? { kind: byName, via: 'name' } : null;
 }
 
 /* ---------- Import UI ---------- */
@@ -2485,7 +2563,7 @@ document.getElementById('msgFiles').addEventListener('change', async e => {
       senderName = extractFromName(text);
     }
     const ans = parseAnswerBlock(text);
-    results.push({ file: file.name, ans, senderEmail, senderName, raw: text.length });
+    results.push({ file: file.name, ans, senderEmail, senderName, text, raw: text.length });
   }
   applyImportResults(results);
   e.target.value = '';
@@ -2502,6 +2580,12 @@ function applyImportResults(results) {
       ? `<div class="hist-meta">Absender: <strong>${esc(s)}</strong></div>`
       : `<div class="hist-meta">Absender: unbekannt</div>`;
   };
+  // Collapsible original mail text, so the assignment can be checked.
+  const originalHtml = r => {
+    const t = String(r.text || '').replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    if (!t) return '';
+    return `<details class="coll orig-mail"><summary>Original-Mail anzeigen</summary><pre class="orig-mail-text">${esc(t)}</pre></details>`;
+  };
   // Day lines the parser could not interpret – shown so they can be fixed
   // manually in the table below.
   const unklarHtml = ans => {
@@ -2511,11 +2595,12 @@ function applyImportResults(results) {
   };
   for (const r of results) {
     if (!r.ans) {
-      out.push(`<div class="history-entry" style="border-color: var(--bad)"><strong>${esc(r.file)}</strong>${senderHtml(r)}<div class="hist-meta">Kein gültiger Antwortblock gefunden.</div></div>`);
+      out.push(`<div class="history-entry" style="border-color: var(--bad)"><strong>${esc(r.file)}</strong>${senderHtml(r)}<div class="hist-meta">Kein gültiger Antwortblock gefunden.</div>${originalHtml(r)}</div>`);
       fail++;
       continue;
     }
-    const kind = findKindByAnswer(r.ans, r.senderEmail);
+    const match = findKindByAnswer(r.ans, r.senderEmail);
+    const kind = match && match.kind;
     if (!kind) {
       const idx = pending.length;
       pending.push(r);
@@ -2534,6 +2619,7 @@ function applyImportResults(results) {
             </select>
             <button class="btn ghost btn-assign">Zuordnen</button>
           </div>
+          ${originalHtml(r)}
         </div>
       `);
       ambig++;
@@ -2544,8 +2630,10 @@ function applyImportResults(results) {
     out.push(`
       <div class="history-entry" style="border-color: var(--good)">
         <strong>${esc(r.file)}</strong> → ${esc(kind.name)}
+        <span style="color:var(--ink-mute); font-size: 11px;">(${match.via === 'email' ? 'per Absenderadresse' : 'per Name'})</span>
         <div class="hist-meta">${summarizeBedarf(state.bedarfe[kind.id])}</div>
         ${unklarHtml(r.ans)}
+        ${originalHtml(r)}
       </div>
     `);
   }
@@ -2559,8 +2647,12 @@ function applyImportResults(results) {
       if (sel.value) {
         k = state.kinder.find(x => x.id === sel.value);
         if (!k) return;
-        // Remember the sender address so the next reply is matched automatically.
-        if (!k.email && r.senderEmail) k.email = r.senderEmail;
+        // Remember the sender address (added to any existing ones, separated
+        // by ";") so the next reply is matched automatically.
+        const se = emailList(r.senderEmail)[0];
+        if (se && !emailList(k.email).includes(se)) {
+          k.email = k.email && k.email.trim() ? `${k.email.trim().replace(/[;,\s]+$/, '')}; ${se}` : se;
+        }
       } else {
         k = { id: uid(), name: r.ans.name || r.senderName || r.senderEmail || 'Unbekannt', gruppe: r.ans.gruppe, vertragH: 35, email: r.senderEmail || '', kumulH: 0 };
         state.kinder.push(k);
@@ -2678,7 +2770,7 @@ document.getElementById('btnPasteImport').addEventListener('click', () => {
     const ans = parseAnswerBlock(b);
     const senderEmail = extractFromHeader(b);
     const senderName = extractFromName(b);
-    results.push({ file: `Einfügung ${i+1}`, ans, senderEmail, senderName, raw: b.length });
+    results.push({ file: `Einfügung ${i+1}`, ans, senderEmail, senderName, text: b.trim(), raw: b.length });
   });
   applyImportResults(results);
   document.getElementById('modalPaste').classList.remove('show');
